@@ -6,6 +6,7 @@ export interface Profile {
   id: string
   email: string
   role: string
+  organization_id: string | null
 }
 
 export async function requireProfile(): Promise<{ user: User; profile: Profile }> {
@@ -16,10 +17,10 @@ export async function requireProfile(): Promise<{ user: User; profile: Profile }
     redirect('/admin/login')
   }
 
-  // Try to get role from profiles table, fallback to user metadata
+  // Try to get profile data from profiles table
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, organization_id')
     .eq('id', user!.id)
     .single()
 
@@ -27,6 +28,7 @@ export async function requireProfile(): Promise<{ user: User; profile: Profile }
     id: user!.id,
     email: user!.email ?? '',
     role: profileData?.role ?? (user!.user_metadata?.role as string) ?? 'admin',
+    organization_id: profileData?.organization_id ?? null,
   }
 
   return { user: user!, profile }
