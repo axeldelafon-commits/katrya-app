@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import type { User } from '@supabase/supabase-js'
 
 export interface Profile {
   id: string
@@ -7,7 +8,7 @@ export interface Profile {
   role: string
 }
 
-export async function requireProfile(): Promise<{ profile: Profile }> {
+export async function requireProfile(): Promise<{ user: User; profile: Profile }> {
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
 
@@ -28,5 +29,5 @@ export async function requireProfile(): Promise<{ profile: Profile }> {
     role: profileData?.role ?? (user!.user_metadata?.role as string) ?? 'admin',
   }
 
-  return { profile }
+  return { user: user!, profile }
 }
