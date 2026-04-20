@@ -12,3 +12,14 @@ export function generateKatryaId(): string {
   }
   return `KTRY-${result}`
 }
+
+// Génère un token unique pour le résolveur NFC
+export function generateResolverToken(): string {
+  return randomBytes(32).toString('hex')
+}
+
+// Construit l'URL du résolveur NFC à partir d'un token
+export function buildResolverUrl(token: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://katrya-app.vercel.app'
+  return `${baseUrl}/r/${token}`
+}
