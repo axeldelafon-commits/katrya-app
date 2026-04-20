@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import AddToWardrobeButton from './AddToWardrobeButton'
 
 interface PageProps {
   params: { katryaId: string }
@@ -41,7 +42,6 @@ export default async function PassportPage({ params }: PageProps) {
           <h1 className="text-3xl font-bold mt-1">{product.brand} — {product.model_name}</h1>
           <p className="text-gray-400 mt-2">{product.category}</p>
         </div>
-
         <div className="border border-gray-800 rounded-xl p-4 mb-4">
           <h2 className="text-sm font-semibold text-gray-400 mb-3">PASSEPORT NUMÉRIQUE</h2>
           <div className="space-y-2 text-sm">
@@ -69,9 +69,8 @@ export default async function PassportPage({ params }: PageProps) {
             </div>
           </div>
         </div>
-
         {publicData && (
-          <div className="border border-gray-800 rounded-xl p-4">
+          <div className="border border-gray-800 rounded-xl p-4 mb-4">
             <h2 className="text-sm font-semibold text-gray-400 mb-3">INFORMATIONS</h2>
             <div className="space-y-2 text-sm">
               {Object.entries(publicData).map(([key, value]) => (
@@ -83,6 +82,7 @@ export default async function PassportPage({ params }: PageProps) {
             </div>
           </div>
         )}
+        <AddToWardrobeButton productId={product.id} katryaId={product.katrya_id} />
       </div>
     </main>
   )
