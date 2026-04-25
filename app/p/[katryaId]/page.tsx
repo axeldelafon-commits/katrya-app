@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import AddToWardrobeButton from './AddToWardrobeButton'
+import ImageGallery from './ImageGallery'
 
 interface PageProps {
   params: { katryaId: string }
@@ -40,45 +42,32 @@ export default async function PassportPage({ params }: PageProps) {
     (a: any, b: any) => a.position - b.position
   )
 
-  // Main image: from product_images first, then passport public_data main_image_url
-  const mainImageUrl = images.length > 0
-    ? images[0].url
-    : publicData?.main_image_url || null
+  // Fallback image URL from passport public_data
+  const fallbackUrl = publicData?.main_image_url || null
 
   return (
     <main className="min-h-screen bg-black text-white">
       {/* Header */}
       <div className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
         <span className="text-xs tracking-[0.3em] uppercase text-white/40">{org?.name || 'KATRYA'}</span>
-        <span className="text-xs tracking-[0.2em] uppercase text-white/30">Passeport Produit</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs tracking-[0.2em] uppercase text-white/30">Passeport Produit</span>
+          <Link
+            href="/wardrobe"
+            className="text-xs tracking-[0.2em] uppercase text-white/60 border border-white/20 px-3 py-1 rounded-full hover:border-white/50 hover:text-white transition-colors"
+          >
+            Mon dressing
+          </Link>
+        </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-8">
-        {/* Photo gallery */}
-        {mainImageUrl ? (
-          <div className="mb-8">
-            <div className="aspect-square w-full bg-white/5 rounded-2xl overflow-hidden mb-3">
-              <img
-                src={mainImageUrl}
-                alt={product.model_name || 'Produit'}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {images.slice(1).map((img: any) => (
-                  <div key={img.id} className="flex-none w-20 h-20 bg-white/5 rounded-xl overflow-hidden">
-                    <img src={img.url} alt={img.alt_text || ''} className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="mb-8 aspect-square w-full bg-white/5 rounded-2xl flex items-center justify-center">
-            <span className="text-white/20 text-sm">Aucune photo disponible</span>
-          </div>
-        )}
+        {/* Photo gallery - interactive client component */}
+        <ImageGallery
+          images={images}
+          productName={`${product.brand} ${product.model_name}`}
+          fallbackUrl={fallbackUrl}
+        />
 
         {/* Product title */}
         <div className="mb-6">
@@ -124,11 +113,11 @@ export default async function PassportPage({ params }: PageProps) {
               {Object.entries(publicData)
                 .filter(([key]) => key !== 'main_image_url')
                 .map(([key, value]) => (
-                <div key={key} className="flex justify-between">
-                  <span className="text-white/40 capitalize">{key.replace(/_/g, ' ')}</span>
-                  <span className="text-white/70">{String(value)}</span>
-                </div>
-              ))}
+                  <div key={key} className="flex justify-between">
+                    <span className="text-white/40 capitalize">{key.replace(/_/g, ' ')}</span>
+                    <span className="text-white/70">{String(value)}</span>
+                  </div>
+                ))}
             </div>
           </div>
         )}
