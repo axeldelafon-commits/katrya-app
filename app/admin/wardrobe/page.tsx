@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { createBrowserClient } from '@supabase/ssr'
 
 type WardrobeItem = {
   id: string
@@ -18,17 +19,31 @@ type WardrobeItem = {
 export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/admin/wardrobe')
-      .then(r => r.json())
-      .then(data => { setItems(data); setLoading(false) })
-      .catch(() => setLoading(false))
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase
+      .from('wardrobe_items')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) setError(error.message)
+        else setItems(data ?? [])
+        setLoading(false)
+      })
   }, [])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer cet article ?')) return
-    await fetch(`/api/admin/wardrobe/${id}`, { method: 'DELETE' })
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    await supabase.from('wardrobe_items').delete().eq('id', id)
     setItems(items.filter(i => i.id !== id))
   }
 
@@ -42,11 +57,14 @@ export default function WardrobePage() {
         }}>+ Ajouter un article</Link>
       </div>
 
-      {loading ? (
-        <p style={{ color: '#666' }}>Chargement...</p>
-      ) : items.length === 0 ? (
+      {loading && <p style={{ color: '#666' }}>Chargement...</p>}
+      {error && <p style={{ color: '#f87171' }}>Erreur : {error}</p>}
+
+      {!loading && !error && items.length === 0 && (
         <p style={{ color: '#666' }}>Aucun article dans le dressing. Ajoutez votre premier article !</p>
-      ) : (
+      )}
+
+      {!loading && !error && items.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24 }}>
           {items.map(item => (
             <div key={item.id} style={{
@@ -60,9 +78,7 @@ export default function WardrobePage() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{item.name}</div>
                 <div style={{ color: '#888', fontSize: 13 }}>{item.brand} — {item.category}</div>
-                <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
-                  {item.color} / {item.size}
-                </div>
+                <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>{item.color} / {item.size}</div>
                 {item.nfc_tag_id && (
                   <div style={{ color: '#4ade80', fontSize: 11, marginTop: 4 }}>NFC: {item.nfc_tag_id}</div>
                 )}
