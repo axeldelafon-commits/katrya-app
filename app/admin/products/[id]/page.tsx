@@ -4,6 +4,7 @@ import Link from 'next/link'
 import LinkTagForm from './link-tag-form'
 import PublishPassportForm from './publish-passport-form'
 import StatusForm from './status-form'
+import ImageUploader from './image-uploader'
 
 export default async function ProductDetailPage({
   params
@@ -12,11 +13,13 @@ export default async function ProductDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+
   const { data: product } = await supabase
     .from('products')
     .select('*')
     .eq('id', id)
     .maybeSingle()
+
   if (!product) notFound()
 
   const { data: tag } = await supabase
@@ -69,55 +72,16 @@ export default async function ProductDetailPage({
             Voir passeport public ↗
           </Link>
         </div>
-
         <div style={card}>
           <h3 style={{ margin: '0 0 12px' }}>Statut produit</h3>
           <StatusForm productId={id} currentStatus={product.status} />
         </div>
       </div>
 
-      {/* Photos du produit */}
+      {/* Photos du produit - composant interactif */}
       <div style={card}>
         <h3 style={{ margin: '0 0 16px' }}>Photos du produit</h3>
-        {images && images.length > 0 ? (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-            {images.map((img, i) => (
-              <div key={img.id} style={{ position: 'relative' }}>
-                <img
-                  src={img.url}
-                  alt={img.alt_text || `Photo ${i + 1}`}
-                  style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid #333' }}
-                />
-                <span style={{ position: 'absolute', top: 4, left: 4, background: '#000', color: '#fff', fontSize: 10, padding: '2px 6px', borderRadius: 4 }}>#{i + 1}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p style={{ color: '#888', marginBottom: 16 }}>Aucune photo. Ajoutez des URLs ci-dessous.</p>
-        )}
-        <form action={`/api/admin/products/${id}/images`} method="POST" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <label style={{ fontSize: 13, color: '#aaa' }}>URL de l&apos;image</label>
-          <input
-            name="url"
-            type="url"
-            placeholder="https://..."
-            required
-            style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 14 }}
-          />
-          <label style={{ fontSize: 13, color: '#aaa' }}>Texte alternatif (optionnel)</label>
-          <input
-            name="alt_text"
-            type="text"
-            placeholder="Description de l'image"
-            style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 14 }}
-          />
-          <button
-            type="submit"
-            style={{ background: '#0cf', color: '#000', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 600, cursor: 'pointer', width: 'fit-content' }}
-          >
-            Ajouter cette photo
-          </button>
-        </form>
+        <ImageUploader productId={id} initialImages={images || []} />
       </div>
 
       <div style={card}>
@@ -146,7 +110,7 @@ export default async function ProductDetailPage({
       </div>
 
       <div style={card}>
-        <h3 style={{ margin: '0 0 12px' }}>Journal d’événements</h3>
+        <h3 style={{ margin: '0 0 12px' }}>Journal d'événements</h3>
         {events?.map((ev) => (
           <div key={ev.id} style={{ borderBottom: '1px solid #1a1a1a', paddingBottom: 12, marginBottom: 12 }}>
             <p style={{ margin: '0 0 4px' }}>
