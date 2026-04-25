@@ -24,12 +24,14 @@ export default function ImageUploader({ productId, initialImages }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   const handleUrlChange = (val: string) => {
     setUrlInput(val)
     setPreviewError(false)
+    setSuccessMsg('')
     if (val.startsWith('http')) {
       setPreviewUrl(val)
     } else {
@@ -37,9 +39,20 @@ export default function ImageUploader({ productId, initialImages }: Props) {
     }
   }
 
+  const refreshImages = async () => {
+    const res = await fetch(`/api/admin/products/${productId}/images`)
+    if (res.ok) {
+      const data = await res.json()
+      setImages(data.images || [])
+    } else {
+      router.refresh()
+    }
+  }
+
   const submitImage = async (url: string, altText: string) => {
     setLoading(true)
     setUploadError('')
+    setSuccessMsg('')
     try {
       const fd = new FormData()
       fd.append('url', url)
@@ -48,21 +61,19 @@ export default function ImageUploader({ productId, initialImages }: Props) {
         method: 'POST',
         body: fd,
       })
-      if (!res.ok && !res.redirected) {
-        const data = await res.json().catch(() => ({}))
+      const data = await res.json()
+      if (!res.ok) {
         throw new Error(data.error || 'Erreur lors de l\'ajout')
       }
-      // Refresh images list
-      const res2 = await fetch(`/api/admin/products/${productId}/images`)
-      if (res2.ok) {
-        const data2 = await res2.json()
-        setImages(data2.images || [])
+      if (data.image) {
+        setImages(prev => [...prev, data.image])
       } else {
-        router.refresh()
+        await refreshImages()
       }
       setUrlInput('')
       setAltInput('')
       setPreviewUrl(null)
+      setSuccessMsg('Photo ajoutée avec succès !')
     } catch (err: any) {
       setUploadError(err.message)
     } finally {
@@ -77,20 +88,26 @@ export default function ImageUploader({ productId, initialImages }: Props) {
     }
     setLoading(true)
     setUploadError('')
+    setSuccessMsg('')
     try {
       const fd = new FormData()
       fd.append('file', file)
-      fd.append('alt_text', altInput)
+      if (altInput) fd.append('alt_text', altInput)
       const res = await fetch(`/api/admin/products/${productId}/images`, {
         method: 'POST',
         body: fd,
       })
-      if (!res.ok && !res.redirected) {
-        const data = await res.json().catch(() => ({}))
+      const data = await res.json()
+      if (!res.ok) {
         throw new Error(data.error || 'Erreur upload')
       }
-      router.refresh()
+      if (data.image) {
+        setImages(prev => [...prev, data.image])
+      } else {
+        await refreshImages()
+      }
       setAltInput('')
+      setSuccessMsg('Photo uploadée avec succès !')
     } catch (err: any) {
       setUploadError(err.message)
     } finally {
@@ -103,7 +120,7 @@ export default function ImageUploader({ productId, initialImages }: Props) {
     setIsDragging(false)
     const file = e.dataTransfer.files[0]
     if (file) handleFileUpload(file)
-  }, [altInput])
+  }, [])
 
   const handleDelete = async (imageId: string) => {
     if (!confirm('Supprimer cette photo ?')) return
@@ -124,6 +141,7 @@ export default function ImageUploader({ productId, initialImages }: Props) {
                 src={img.url}
                 alt={img.alt_text || `Photo ${i + 1}`}
                 style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid #333' }}
+                onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
               />
               <span style={{ position: 'absolute', top: 4, left: 4, background: '#000', color: '#fff', fontSize: 10, padding: '2px 6px', borderRadius: 4 }}>#{i + 1}</span>
               <button
@@ -138,6 +156,8 @@ export default function ImageUploader({ productId, initialImages }: Props) {
       ) : (
         <p style={{ color: '#888', marginBottom: 16 }}>Aucune photo. Ajoutez des images ci-dessous.</p>
       )}
+
+      {successMsg && <p style={{ color: '#4c4', fontSize: 13, marginBottom: 12 }}>✔ {successMsg}</p>}
 
       {/* Drag & Drop zone */}
       <div
@@ -154,6 +174,7 @@ export default function ImageUploader({ productId, initialImages }: Props) {
           background: isDragging ? 'rgba(0,204,255,0.05)' : '#0a0a0a',
           marginBottom: 16,
           transition: 'all 0.2s',
+          opacity: loading ? 0.5 : 1,
         }}
       >
         <input
@@ -164,27 +185,25 @@ export default function ImageUploader({ productId, initialImages }: Props) {
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }}
         />
         <p style={{ color: '#888', margin: 0, fontSize: 14 }}>
-          {isDragging ? '📂 Relâchez pour uploader' : '📷 Glissez une image ici ou cliquez pour choisir un fichier'}
+          {loading ? '⏳ Upload en cours...' : isDragging ? '📂 Relâchez pour uploader' : '📷 Glissez une image ici ou cliquez pour choisir un fichier'}
         </p>
         <p style={{ color: '#555', margin: '4px 0 0', fontSize: 12 }}>JPG, PNG, WEBP acceptés</p>
       </div>
 
       {/* URL input */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <label style={{ fontSize: 13, color: '#aaa' }}>Ou ajouter via URL</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={urlInput}
-            onChange={(e) => handleUrlChange(e.target.value)}
-            type="url"
-            placeholder="https://..."
-            style={{ flex: 1, background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 14 }}
-          />
-        </div>
+        <label style={{ fontSize: 13, color: '#aaa' }}>Ou ajouter via URL externe</label>
+        <input
+          value={urlInput}
+          onChange={(e) => handleUrlChange(e.target.value)}
+          type="url"
+          placeholder="https://..."
+          style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 14 }}
+        />
 
         {/* URL Preview */}
         {previewUrl && (
-          <div style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: '#111', border: `1px solid ${previewError ? '#c00' : '#333'}`, borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
             {!previewError ? (
               <img
                 src={previewUrl}
@@ -194,11 +213,11 @@ export default function ImageUploader({ productId, initialImages }: Props) {
               />
             ) : (
               <div style={{ width: 60, height: 60, background: '#222', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 10, color: '#666', textAlign: 'center' }}>Image inaccessible</span>
+                <span style={{ fontSize: 10, color: '#f66', textAlign: 'center' }}>Inaccessible</span>
               </div>
             )}
             <span style={{ fontSize: 12, color: previewError ? '#f66' : '#0cf' }}>
-              {previewError ? '⚠️ Cette URL ne charge pas d\'image' : '✔ Prévisualisation'}
+              {previewError ? '⚠️ Cette URL ne charge pas — vérifiez qu\'elle pointe vers un fichier image public' : '✔ Prévisualisation OK'}
             </span>
           </div>
         )}
