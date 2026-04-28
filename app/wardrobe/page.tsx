@@ -46,19 +46,33 @@ export default function WardrobePage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      if (user) {
-        await loadWardrobe()
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError) {
+          console.warn('[wardrobe] auth.getUser error:', authError.message)
+        }
+        setUser(user)
+        if (user) {
+          await loadWardrobe(user.id)
+        }
+      } catch (err) {
+        console.error('[wardrobe] init failed:', err)
+      } finally {
+        // CRITICAL: always exit the loading state, even on error,
+        // otherwise the page is stuck on "Chargement..." forever.
+        setLoading(false)
       }
-      setLoading(false)
     }
     init()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        await loadWardrobe()
+        try {
+          await loadWardrobe(session.user.id)
+        } catch (err) {
+          console.error('[wardrobe] loadWardrobe (auth change) failed:', err)
+        }
       } else {
         setItems([])
       }
@@ -68,9 +82,10 @@ export default function WardrobePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const loadWardrobe = async () => {
+  const loadWardrobe = async (userId: string) => {
     // Pull the first product image alongside basic product info so the 3D view
     // can render real photos instead of category emojis.
+    // Defense in depth: explicit user_id filter on top of RLS.
     const { data, error } = await supabase
       .from('wardrobe_items')
       .select(`
@@ -80,8 +95,13 @@ export default function WardrobePage() {
           product_images(url, position)
         )
       `)
+      .eq('user_id', userId)
       .order('added_at', { ascending: false })
-    if (!error && data) setItems(data as any)
+    if (error) {
+      console.error('[wardrobe] loadWardrobe error:', error.message)
+      return
+    }
+    if (data) setItems(data as any)
   }
 
   const toggleFavorite = async (itemId: string, current: boolean) => {
