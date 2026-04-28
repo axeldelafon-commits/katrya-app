@@ -3,6 +3,18 @@
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+import type { Wardrobe3DItem } from './Wardrobe3D'
+
+// Lazy-load the 3D view (Three.js is ~600KB) only when the user opts in
+const Wardrobe3D = dynamic(() => import('./Wardrobe3D'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+      Chargement de la vue 3D...
+    </div>
+  ),
+})
 
 interface WardrobeItem {
   id: string
@@ -16,6 +28,7 @@ interface WardrobeItem {
     model_name: string
     category: string
     status: string
+    product_images?: { url: string; position: number }[]
   }
 }
 
@@ -24,6 +37,7 @@ export default function WardrobePage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'favorites'>('all')
+  const [view, setView] = useState<'2d' | '3d'>('2d')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,14 +65,20 @@ export default function WardrobePage() {
     })
 
     return () => subscription.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadWardrobe = async () => {
+    // Pull the first product image alongside basic product info so the 3D view
+    // can render real photos instead of category emojis.
     const { data, error } = await supabase
       .from('wardrobe_items')
       .select(`
         id, product_id, added_at, notes, is_favorite,
-        products(katrya_id, brand, model_name, category, status)
+        products(
+          katrya_id, brand, model_name, category, status,
+          product_images(url, position)
+        )
       `)
       .order('added_at', { ascending: false })
     if (!error && data) setItems(data as any)
@@ -84,6 +104,28 @@ export default function WardrobePage() {
   }
 
   const displayedItems = filter === 'favorites' ? items.filter(i => i.is_favorite) : items
+
+  // Map to 3D items: pick the lowest-position image as the visual
+  const items3D: Wardrobe3DItem[] = displayedItems
+    .map((it) => {
+      const p = it.products
+      if (!p) return null
+      const sortedImages = (p.product_images || [])
+        .slice()
+        .sort((a, b) => a.position - b.position)
+      const imageUrl = sortedImages[0]?.url ?? null
+      return {
+        id: it.id,
+        product_id: it.product_id,
+        katrya_id: p.katrya_id,
+        brand: p.brand,
+        model_name: p.model_name,
+        category: p.category,
+        image_url: imageUrl,
+        is_favorite: it.is_favorite,
+      } as Wardrobe3DItem
+    })
+    .filter((x): x is Wardrobe3DItem => x !== null)
 
   const categoryEmoji: Record<string, string> = {
     outerwear: '🧥',
@@ -123,6 +165,40 @@ export default function WardrobePage() {
     )
   }
 
+  // 3D fullscreen layout
+  if (view === '3d') {
+    return (
+      <main className="h-screen w-screen bg-black text-white overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-900 bg-black/80 backdrop-blur z-10">
+          <div>
+            <h1 className="text-lg font-bold">👗 Mon Dressing 3D</h1>
+            <p className="text-xs text-gray-500">
+              {displayedItems.length} pièce{displayedItems.length !== 1 ? 's' : ''}
+              {filter === 'favorites' && ' · favoris'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setView('2d')}
+              className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition"
+            >
+              ← Vue grille
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="text-xs text-gray-500 hover:text-gray-300 transition px-2"
+            >
+              Déconnexion
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 relative">
+          <Wardrobe3D items={items3D} />
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -142,28 +218,38 @@ export default function WardrobePage() {
       </div>
 
       <div className="max-w-lg mx-auto p-4">
-        {/* Filtres */}
+        {/* Filtres + toggle vue */}
         {items.length > 0 && (
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2 mb-6 items-center justify-between flex-wrap">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  filter === 'all'
+                    ? 'bg-white text-black'
+                    : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+                }`}
+              >
+                Tout ({items.length})
+              </button>
+              <button
+                onClick={() => setFilter('favorites')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  filter === 'favorites'
+                    ? 'bg-white text-black'
+                    : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+                }`}
+              >
+                ♥ Favoris ({items.filter(i => i.is_favorite).length})
+              </button>
+            </div>
             <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                filter === 'all'
-                  ? 'bg-white text-black'
-                  : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-              }`}
+              onClick={() => setView('3d')}
+              className="px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition flex items-center gap-1.5"
+              title="Voir mon dressing en 3D"
             >
-              Tout ({items.length})
-            </button>
-            <button
-              onClick={() => setFilter('favorites')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                filter === 'favorites'
-                  ? 'bg-white text-black'
-                  : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-              }`}
-            >
-              ♥ Favoris ({items.filter(i => i.is_favorite).length})
+              <span>✨</span>
+              <span>Vue 3D</span>
             </button>
           </div>
         )}
@@ -183,13 +269,31 @@ export default function WardrobePage() {
             {displayedItems.map(item => {
               const p = item.products
               const emoji = categoryEmoji[p?.category] || categoryEmoji.default
+              const sortedImages = (p?.product_images || [])
+                .slice()
+                .sort((a, b) => a.position - b.position)
+              const cover = sortedImages[0]?.url
               return (
                 <div
                   key={item.id}
                   className="bg-gray-950 border border-gray-800 rounded-2xl p-4 relative"
                 >
-                  {/* Emoji catégorie */}
-                  <div className="text-3xl mb-3 text-center">{emoji}</div>
+                  {/* Image ou Emoji catégorie */}
+                  {cover ? (
+                    <div className="aspect-square mb-3 rounded-xl overflow-hidden bg-gray-900">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={cover}
+                        alt={p?.model_name || ''}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-3xl mb-3 text-center">{emoji}</div>
+                  )}
 
                   {/* Infos */}
                   <Link href={`/p/${p?.katrya_id}`}>
