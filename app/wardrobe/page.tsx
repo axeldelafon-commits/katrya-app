@@ -50,13 +50,10 @@ export default function WardrobePage() {
     // bail out of the loading state so the user sees something.
     const safetyTimeout = setTimeout(() => {
       setLoading(false)
-      setDebugMsg('timeout: bail out after 8s')
+      setDebugMsg(prev => prev === 'init' ? 'timeout: bail out after 8s' : prev)
     }, 8000)
 
     // Helper: race a promise against a timeout.
-    // supabase.auth.getUser() can hang forever when the cached JWT is corrupt
-    // or when the refresh-token loop deadlocks. We never want to await it for
-    // more than 4s.
     const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
       return Promise.race([
         promise,
@@ -66,10 +63,21 @@ export default function WardrobePage() {
       ])
     }
 
+    let didLoad = false
+
+    const tryLoad = async (sessionUser: any) => {
+      if (didLoad || !sessionUser) return
+      didLoad = true
+      try {
+        await loadWardrobe(sessionUser.id)
+      } catch (err: any) {
+        console.error('[wardrobe] loadWardrobe failed:', err)
+        setDebugMsg('load failed: ' + (err?.message || String(err)))
+      }
+    }
+
     const init = async () => {
       try {
-        // Prefer getSession() (synchronous read of localStorage, never blocks)
-        // over getUser() (network call, can hang on bad JWT).
         setDebugMsg('reading session')
         const { data: { session } } = await withTimeout(
           supabase.auth.getSession(),
@@ -80,29 +88,28 @@ export default function WardrobePage() {
         setUser(sessionUser)
         setDebugMsg(sessionUser ? `user found (${sessionUser.email}), loading wardrobe` : 'no session')
         if (sessionUser) {
-          await loadWardrobe(sessionUser.id)
-          setDebugMsg('wardrobe loaded')
+          await tryLoad(sessionUser)
+          setDebugMsg(prev => prev.startsWith('load') ? prev : 'wardrobe loaded')
         }
       } catch (err: any) {
+        // getSession timeout / hang — wait for onAuthStateChange to deliver the session.
         console.error('[wardrobe] init failed:', err)
-        setDebugMsg('init failed: ' + (err?.message || String(err)))
+        setDebugMsg('init failed: ' + (err?.message || String(err)) + ' — waiting for auth event')
       } finally {
-        // CRITICAL: always exit the loading state, even on error,
-        // otherwise the page is stuck on "Chargement..." forever.
         clearTimeout(safetyTimeout)
         setLoading(false)
       }
     }
     init()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        try {
-          await loadWardrobe(session.user.id)
-        } catch (err) {
-          console.error('[wardrobe] loadWardrobe (auth change) failed:', err)
-        }
+    // Fallback path: if getSession() hung but the session is actually valid,
+    // onAuthStateChange will fire shortly after (event='INITIAL_SESSION') and
+    // give us the session we need to load the wardrobe.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const sessionUser = session?.user ?? null
+      setUser(sessionUser)
+      if (sessionUser) {
+        await tryLoad(sessionUser)
       } else {
         setItems([])
       }
@@ -111,6 +118,23 @@ export default function WardrobePage() {
     return () => subscription.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Allow user to manually wipe a corrupted Supabase session
+  // (rare, but unlocks them when refresh-token loop deadlocks).
+  const resetSession = async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      /* ignore */
+    }
+    if (typeof window !== 'undefined') {
+      // Drop any stale supabase keys from localStorage.
+      Object.keys(window.localStorage)
+        .filter(k => k.startsWith('sb-') || k.includes('supabase'))
+        .forEach(k => window.localStorage.removeItem(k))
+      window.location.reload()
+    }
+  }
 
   const loadWardrobe = async (userId: string) => {
     // Pull the first product image alongside basic product info so the 3D view
@@ -257,8 +281,17 @@ export default function WardrobePage() {
   return (
     <main className="min-h-screen bg-black text-white">
       {/* DEBUG banner — retire-le quand tout est confirmé OK */}
-      <div className="bg-yellow-950/40 border-b border-yellow-900/50 text-yellow-200 text-xs px-4 py-1 font-mono">
-        debug: {debugMsg} · user={user?.email ?? '?'} · items={items.length}
+      <div className="bg-yellow-950/40 border-b border-yellow-900/50 text-yellow-200 text-xs px-4 py-1 font-mono flex items-center justify-between gap-3">
+        <span className="truncate">
+          debug: {debugMsg} · user={user?.email ?? '?'} · items={items.length}
+        </span>
+        <button
+          onClick={resetSession}
+          className="shrink-0 text-yellow-300 underline hover:text-yellow-100"
+          title="Vide la session Supabase et recharge la page"
+        >
+          Réinitialiser la session
+        </button>
       </div>
 
       {/* Header */}
