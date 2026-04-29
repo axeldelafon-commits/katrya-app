@@ -129,8 +129,10 @@ export default function WardrobePage() {
       .order('added_at', { ascending: false })
     if (error) {
       console.error('[wardrobe] loadWardrobe error:', error.message)
+      setDebugMsg('load error: ' + error.message)
       return
     }
+    setDebugMsg(`loaded ${data?.length ?? 0} items for user ${userId.slice(0, 8)}…`)
     if (data) setItems(data as any)
   }
 
@@ -254,6 +256,11 @@ export default function WardrobePage() {
 
   return (
     <main className="min-h-screen bg-black text-white">
+      {/* DEBUG banner — retire-le quand tout est confirmé OK */}
+      <div className="bg-yellow-950/40 border-b border-yellow-900/50 text-yellow-200 text-xs px-4 py-1 font-mono">
+        debug: {debugMsg} · user={user?.email ?? '?'} · items={items.length}
+      </div>
+
       {/* Header */}
       <div className="sticky top-0 bg-black border-b border-gray-900 px-4 py-4 z-10">
         <div className="max-w-lg mx-auto flex items-center justify-between">
