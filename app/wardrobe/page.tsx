@@ -53,18 +53,34 @@ export default function WardrobePage() {
       setDebugMsg('timeout: bail out after 8s')
     }, 8000)
 
+    // Helper: race a promise against a timeout.
+    // supabase.auth.getUser() can hang forever when the cached JWT is corrupt
+    // or when the refresh-token loop deadlocks. We never want to await it for
+    // more than 4s.
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+        ),
+      ])
+    }
+
     const init = async () => {
       try {
-        setDebugMsg('calling auth.getUser()')
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError) {
-          console.warn('[wardrobe] auth.getUser error:', authError.message)
-          setDebugMsg('auth error: ' + authError.message)
-        }
-        setUser(user)
-        setDebugMsg(user ? 'user found, loading wardrobe' : 'no user')
-        if (user) {
-          await loadWardrobe(user.id)
+        // Prefer getSession() (synchronous read of localStorage, never blocks)
+        // over getUser() (network call, can hang on bad JWT).
+        setDebugMsg('reading session')
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(),
+          4000,
+          'getSession'
+        )
+        const sessionUser = session?.user ?? null
+        setUser(sessionUser)
+        setDebugMsg(sessionUser ? `user found (${sessionUser.email}), loading wardrobe` : 'no session')
+        if (sessionUser) {
+          await loadWardrobe(sessionUser.id)
           setDebugMsg('wardrobe loaded')
         }
       } catch (err: any) {
