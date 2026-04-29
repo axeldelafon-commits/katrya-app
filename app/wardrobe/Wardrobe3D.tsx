@@ -28,30 +28,36 @@ export interface Wardrobe3DItem {
 /* -------------------------------------------------------------------------- */
 
 function makePlaceholderTexture(label: string): THREE.Texture {
+  // Guard against being called server-side (the component is dynamic+ssr:false
+  // but useMemo can theoretically run before window is ready in some contexts).
+  if (typeof document === 'undefined') {
+    return new THREE.Texture()
+  }
   const c = document.createElement('canvas')
   c.width = 512
   c.height = 640
   const ctx = c.getContext('2d')!
-  // Soft gradient background
+  // Soft gradient background — lighter so the placeholder is clearly visible
   const grad = ctx.createLinearGradient(0, 0, 0, c.height)
-  grad.addColorStop(0, '#1a1a1a')
-  grad.addColorStop(1, '#0a0a0a')
+  grad.addColorStop(0, '#3a3a3a')
+  grad.addColorStop(1, '#1f1f1f')
   ctx.fillStyle = grad
   ctx.fillRect(0, 0, c.width, c.height)
-  // Border
-  ctx.strokeStyle = '#222'
-  ctx.lineWidth = 4
-  ctx.strokeRect(2, 2, c.width - 4, c.height - 4)
-  // Label
-  ctx.fillStyle = '#666'
-  ctx.font = '600 28px sans-serif'
+  // Cyan/blue accent border (matches the 'Vue 3D' button gradient)
+  ctx.strokeStyle = '#0891b2'
+  ctx.lineWidth = 6
+  ctx.strokeRect(3, 3, c.width - 6, c.height - 6)
+  // Brand label
+  ctx.fillStyle = '#e5e7eb'
+  ctx.font = 'bold 38px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(label.toUpperCase(), c.width / 2, c.height / 2)
-  ctx.fillStyle = '#333'
-  ctx.font = '20px sans-serif'
+  ctx.fillText(label.toUpperCase(), c.width / 2, c.height / 2 - 10)
+  ctx.fillStyle = '#9ca3af'
+  ctx.font = '22px sans-serif'
   ctx.fillText('aucune photo', c.width / 2, c.height / 2 + 36)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
+  tex.needsUpdate = true
   return tex
 }
 
@@ -185,7 +191,8 @@ function Rack({
   hoveredId: string | null
   setHoveredId: (id: string | null) => void
 }) {
-  // Layout: curved arc, up to 8 per row, then stack rows
+  // Layout: curved arc, up to 8 per row, then stack rows.
+  // Special case: with a single item we want it dead-center, facing the camera.
   const positions = useMemo(() => {
     const perRow = Math.min(8, Math.max(3, items.length))
     const radius = 4.5
@@ -196,19 +203,25 @@ function Rack({
       const idxInRow = i % perRow
       const itemsInThisRow = Math.min(perRow, items.length - row * perRow)
       const localSpan = Math.min(arcSpan, (itemsInThisRow - 1) * 0.32)
+      // Avoid divide-by-zero when itemsInThisRow === 1 (would yield NaN positions)
       const angle =
-        itemsInThisRow === 1
+        itemsInThisRow <= 1
           ? 0
           : -localSpan / 2 + (idxInRow * localSpan) / (itemsInThisRow - 1)
+      // For a lone item, drop it in front of the camera at z = -radius/1.5 so
+      // it actually shows up instead of being on the rear arc.
       const x = Math.sin(angle) * radius
-      const z = -Math.cos(angle) * radius
+      const z = itemsInThisRow === 1 ? -radius * 0.6 : -Math.cos(angle) * radius
       const y = -row * rowGap + 0.2
       return { x, y, z, rotationY: angle }
     })
   }, [items])
 
-  // Generate horizontal rod segments per row
+  // Generate horizontal rod segments per row.
+  // Skip the rod entirely when there's only one item (no rod = cleaner look
+  // for a single hanging piece).
   const rodMeshes = useMemo(() => {
+    if (items.length <= 1) return [] as JSX.Element[]
     const perRow = Math.min(8, Math.max(3, items.length))
     const radius = 4.5
     const rowGap = 2
@@ -217,7 +230,6 @@ function Rack({
     for (let r = 0; r < rows; r++) {
       const itemsInThisRow = Math.min(perRow, items.length - r * perRow)
       const localSpan = Math.min(Math.PI * 0.85, (itemsInThisRow - 1) * 0.32)
-      const arcLen = localSpan * radius
       const y = -r * rowGap + 1.55
       // Create curved tube using TorusGeometry slice
       segments.push(
