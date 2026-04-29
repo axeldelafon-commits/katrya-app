@@ -36,6 +36,7 @@ export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [debugMsg, setDebugMsg] = useState<string>('init')
   const [filter, setFilter] = useState<'all' | 'favorites'>('all')
   const [view, setView] = useState<'2d' | '3d'>('2d')
 
@@ -45,21 +46,34 @@ export default function WardrobePage() {
   )
 
   useEffect(() => {
+    // Hard safety net: if anything hangs for more than 8s,
+    // bail out of the loading state so the user sees something.
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false)
+      setDebugMsg('timeout: bail out after 8s')
+    }, 8000)
+
     const init = async () => {
       try {
+        setDebugMsg('calling auth.getUser()')
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError) {
           console.warn('[wardrobe] auth.getUser error:', authError.message)
+          setDebugMsg('auth error: ' + authError.message)
         }
         setUser(user)
+        setDebugMsg(user ? 'user found, loading wardrobe' : 'no user')
         if (user) {
           await loadWardrobe(user.id)
+          setDebugMsg('wardrobe loaded')
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('[wardrobe] init failed:', err)
+        setDebugMsg('init failed: ' + (err?.message || String(err)))
       } finally {
         // CRITICAL: always exit the loading state, even on error,
         // otherwise the page is stuck on "Chargement..." forever.
+        clearTimeout(safetyTimeout)
         setLoading(false)
       }
     }
@@ -159,7 +173,10 @@ export default function WardrobePage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Chargement...</div>
+        <div className="text-gray-500 text-sm text-center">
+          <div>Chargement...</div>
+          <div className="mt-2 text-xs text-gray-700">{debugMsg}</div>
+        </div>
       </main>
     )
   }
