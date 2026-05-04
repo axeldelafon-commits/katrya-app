@@ -17,11 +17,13 @@ export async function requireProfile(): Promise<{ user: User; profile: Profile }
     redirect('/admin/login')
   }
 
-  // Try to get profile data from profiles table
+  // Try to get profile data from profiles table.
+  // The profiles table has its own auto-generated id (PK) and a user_id
+  // that links to auth.users — match on user_id, not on id.
   const { data: profileData } = await supabase
     .from('profiles')
     .select('role, organization_id')
-    .eq('id', user!.id)
+    .eq('user_id', user!.id)
     .single()
 
   const profile: Profile = {
