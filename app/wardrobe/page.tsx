@@ -32,6 +32,22 @@ interface WardrobeItem {
   }
 }
 
+// Menu de navigation Katrya simple
+function KatryaMenu() {
+  return (
+    <div className="sticky top-0 z-20 bg-black border-b border-white/5">
+      <div className="max-w-4xl mx-auto px-4 h-12 flex items-center">
+        <Link
+          href="/"
+          className="text-white font-semibold tracking-widest text-sm uppercase hover:opacity-70 transition"
+        >
+          KATRYA
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [user, setUser] = useState<any>(null)
@@ -45,14 +61,11 @@ export default function WardrobePage() {
   )
 
   useEffect(() => {
-    // Hard safety net: if anything hangs for more than 8s,
-    // bail out of the loading state so the user sees something.
     const safetyTimeout = setTimeout(() => {
       setLoading(false)
     }, 8000)
 
-    // Helper: race a promise against a timeout.
-    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
       return Promise.race([
         promise,
         new Promise<T>((_, reject) =>
@@ -85,7 +98,6 @@ export default function WardrobePage() {
           await tryLoad(sessionUser)
         }
       } catch (err: any) {
-        // getSession timeout / hang — wait for onAuthStateChange to deliver the session.
         console.error('[wardrobe] init failed:', err)
       } finally {
         clearTimeout(safetyTimeout)
@@ -95,9 +107,6 @@ export default function WardrobePage() {
 
     init()
 
-    // Fallback path: if getSession() hung but the session is actually valid,
-    // onAuthStateChange will fire shortly after (event='INITIAL_SESSION') and
-    // give us the session we need to load the wardrobe.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const sessionUser = session?.user ?? null
       setUser(sessionUser)
@@ -163,7 +172,6 @@ export default function WardrobePage() {
     ? items.filter(i => i.is_favorite)
     : items
 
-  // Map to 3D items: pick the lowest-position image as the visual
   const items3D: Wardrobe3DItem[] = displayedItems
     .map((it) => {
       const p = it.products
@@ -196,26 +204,27 @@ export default function WardrobePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-gray-500 text-sm animate-pulse">Chargement...</div>
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+        Chargement...
       </div>
     )
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 px-4">
-        <div className="text-6xl">👗</div>
-        <h1 className="text-2xl font-bold text-white">Mon Dressing</h1>
-        <p className="text-gray-400 text-center max-w-sm">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white gap-6 px-4">
+        <KatryaMenu />
+        <div className="text-5xl">\uD83D\uDC57</div>
+        <h1 className="text-2xl font-bold">Mon Dressing</h1>
+        <p className="text-gray-400 text-center">
           Connecte-toi pour accéder à ta collection personnelle KATRYA
         </p>
         <div className="flex gap-3">
-          <Link href="/admin/login" className="px-6 py-3 bg-white text-black rounded-full font-medium hover:bg-gray-100 transition">
+          <Link href="/wardrobe/login" className="px-6 py-3 bg-white text-black rounded-full font-semibold hover:bg-gray-100 transition">
             Se connecter
           </Link>
-          <Link href="/" className="px-6 py-3 bg-gray-900 text-gray-300 rounded-full font-medium hover:bg-gray-800 transition">
-            Retour à l&apos;accueil
+          <Link href="/" className="px-6 py-3 bg-gray-900 text-white rounded-full hover:bg-gray-800 transition">
+            Retour à l'accueil
           </Link>
         </div>
       </div>
@@ -227,8 +236,11 @@ export default function WardrobePage() {
     return (
       <div className="fixed inset-0 bg-black z-50 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur border-b border-white/10">
-          <div>
-            <h1 className="text-white font-semibold text-sm">👗 Mon Dressing 3D</h1>
+          <Link href="/" className="text-white font-semibold tracking-widest text-xs uppercase hover:opacity-70 transition mr-4">
+            KATRYA
+          </Link>
+          <div className="flex-1">
+            <h1 className="text-white font-semibold text-sm">\uD83D\uDC57 Mon Dressing 3D</h1>
             <p className="text-gray-400 text-xs">
               {displayedItems.length} pièce{displayedItems.length !== 1 ? 's' : ''}
               {filter === 'favorites' && ' · favoris'}
@@ -236,11 +248,14 @@ export default function WardrobePage() {
           </div>
           <button
             onClick={() => setView('2d')}
-            className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition"
+            className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition mr-2"
           >
             ← Vue grille
           </button>
-          <button onClick={handleSignOut} className="px-3 py-1.5 rounded-full text-xs text-gray-500 hover:text-gray-300 transition">
+          <button
+            onClick={handleSignOut}
+            className="px-3 py-1.5 rounded-full text-xs text-gray-500 hover:text-gray-300 transition"
+          >
             Déconnexion
           </button>
         </div>
@@ -253,14 +268,20 @@ export default function WardrobePage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-black/95 backdrop-blur border-b border-white/10 px-4 py-4">
+      {/* Menu Katrya */}
+      <KatryaMenu />
+
+      {/* Header dressing */}
+      <div className="sticky top-12 z-10 bg-black/95 backdrop-blur border-b border-white/10 px-4 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold">👗 Mon Dressing</h1>
+            <h1 className="text-xl font-bold">\uD83D\uDC57 Mon Dressing</h1>
             <p className="text-gray-500 text-xs mt-0.5">{items.length} pièce{items.length !== 1 ? 's' : ''}</p>
           </div>
-          <button onClick={handleSignOut} className="text-xs text-gray-600 hover:text-gray-400 transition">
+          <button
+            onClick={handleSignOut}
+            className="text-xs text-gray-600 hover:text-gray-400 transition"
+          >
             Déconnexion
           </button>
         </div>
@@ -272,9 +293,7 @@ export default function WardrobePage() {
           <button
             onClick={() => setFilter('all')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-              filter === 'all'
-                ? 'bg-white text-black'
-                : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+              filter === 'all' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
             }`}
           >
             Tout ({items.length})
@@ -282,12 +301,10 @@ export default function WardrobePage() {
           <button
             onClick={() => setFilter('favorites')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-              filter === 'favorites'
-                ? 'bg-white text-black'
-                : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+              filter === 'favorites' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
             }`}
           >
-            ♥ Favoris ({items.filter(i => i.is_favorite).length})
+            \u2665 Favoris ({items.filter(i => i.is_favorite).length})
           </button>
           <button
             onClick={() => setView('3d')}
@@ -301,18 +318,18 @@ export default function WardrobePage() {
       )}
 
       {/* Grille des articles */}
-      <div className="max-w-4xl mx-auto px-4 pb-12">
+      <div className="max-w-4xl mx-auto px-4 pb-16">
         {displayedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
             <div className="text-5xl">{filter === 'favorites' ? '\u2665' : '\uD83D\uDC57'}</div>
-            <p className="text-gray-500 text-sm whitespace-pre-line">
+            <p className="text-gray-400 text-sm max-w-xs whitespace-pre-line">
               {filter === 'favorites'
                 ? 'Aucun favori pour l\u2019instant.'
                 : 'Ton dressing est vide.\nScanne une puce NFC KATRYA pour commencer !'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-4">
             {displayedItems.map(item => {
               const p = item.products
               const emoji = categoryEmoji[p?.category] || categoryEmoji.default
@@ -321,16 +338,16 @@ export default function WardrobePage() {
                 .sort((a, b) => a.position - b.position)
               const cover = sortedImages[0]?.url
               return (
-                <div key={item.id} className="bg-gray-950 rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition group">
+                <div key={item.id} className="bg-gray-900 rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition group">
                   {/* Image ou Emoji catégorie */}
-                  <div className="aspect-square bg-gray-900 flex items-center justify-center relative overflow-hidden">
+                  <div className="relative aspect-square bg-gray-800 flex items-center justify-center">
                     {cover ? (
-                      <div className="w-full h-full">
+                      <div className="relative w-full h-full">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={cover}
                           alt={p?.model_name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          className="w-full h-full object-cover"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                         />
                       </div>
@@ -338,15 +355,18 @@ export default function WardrobePage() {
                       <span className="text-4xl">{emoji}</span>
                     )}
                   </div>
+
                   {/* Infos */}
                   <div className="p-3">
-                    <p className="text-xs text-gray-400 font-medium truncate">{p?.brand}</p>
-                    <p className="text-sm text-white font-semibold truncate mt-0.5">{p?.model_name}</p>
-                    <p className="text-xs text-gray-600 truncate">{p?.category}</p>
+                    <p className="text-white text-sm font-semibold truncate">{p?.brand}</p>
+                    <p className="text-gray-400 text-xs truncate">{p?.model_name}</p>
+                    <p className="text-gray-600 text-xs capitalize mt-0.5">{p?.category}</p>
+
                     {/* ID */}
-                    <p className="text-xs text-cyan-700 font-mono mt-1">{p?.katrya_id}</p>
+                    <p className="text-gray-700 text-xs font-mono mt-1 truncate">{p?.katrya_id}</p>
+
                     {/* Actions */}
-                    <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center justify-between mt-3">
                       <button
                         onClick={() => toggleFavorite(item.id, item.is_favorite)}
                         className={`text-lg transition ${
@@ -373,8 +393,10 @@ export default function WardrobePage() {
       </div>
 
       {/* Footer user */}
-      <div className="max-w-4xl mx-auto px-4 pb-6 text-center">
-        <p className="text-gray-800 text-xs">{user.email}</p>
+      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur border-t border-white/5 px-4 py-3">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-gray-600 text-xs">{user.email}</p>
+        </div>
       </div>
     </div>
   )
