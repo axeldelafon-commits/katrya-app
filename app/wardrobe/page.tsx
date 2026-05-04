@@ -36,7 +36,6 @@ export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [debugMsg, setDebugMsg] = useState<string>('init')
   const [filter, setFilter] = useState<'all' | 'favorites'>('all')
   const [view, setView] = useState<'2d' | '3d'>('2d')
 
@@ -50,7 +49,6 @@ export default function WardrobePage() {
     // bail out of the loading state so the user sees something.
     const safetyTimeout = setTimeout(() => {
       setLoading(false)
-      setDebugMsg(prev => prev === 'init' ? 'timeout: bail out after 8s' : prev)
     }, 8000)
 
     // Helper: race a promise against a timeout.
@@ -64,7 +62,6 @@ export default function WardrobePage() {
     }
 
     let didLoad = false
-
     const tryLoad = async (sessionUser: any) => {
       if (didLoad || !sessionUser) return
       didLoad = true
@@ -72,13 +69,11 @@ export default function WardrobePage() {
         await loadWardrobe(sessionUser.id)
       } catch (err: any) {
         console.error('[wardrobe] loadWardrobe failed:', err)
-        setDebugMsg('load failed: ' + (err?.message || String(err)))
       }
     }
 
     const init = async () => {
       try {
-        setDebugMsg('reading session')
         const { data: { session } } = await withTimeout(
           supabase.auth.getSession(),
           4000,
@@ -86,20 +81,18 @@ export default function WardrobePage() {
         )
         const sessionUser = session?.user ?? null
         setUser(sessionUser)
-        setDebugMsg(sessionUser ? `user found (${sessionUser.email}), loading wardrobe` : 'no session')
         if (sessionUser) {
           await tryLoad(sessionUser)
-          setDebugMsg(prev => prev.startsWith('load') ? prev : 'wardrobe loaded')
         }
       } catch (err: any) {
         // getSession timeout / hang — wait for onAuthStateChange to deliver the session.
         console.error('[wardrobe] init failed:', err)
-        setDebugMsg('init failed: ' + (err?.message || String(err)) + ' — waiting for auth event')
       } finally {
         clearTimeout(safetyTimeout)
         setLoading(false)
       }
     }
+
     init()
 
     // Fallback path: if getSession() hung but the session is actually valid,
@@ -119,44 +112,31 @@ export default function WardrobePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Allow user to manually wipe a corrupted Supabase session
-  // (rare, but unlocks them when refresh-token loop deadlocks).
-  const resetSession = async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch {
-      /* ignore */
-    }
-    if (typeof window !== 'undefined') {
-      // Drop any stale supabase keys from localStorage.
-      Object.keys(window.localStorage)
-        .filter(k => k.startsWith('sb-') || k.includes('supabase'))
-        .forEach(k => window.localStorage.removeItem(k))
-      window.location.reload()
-    }
-  }
-
   const loadWardrobe = async (userId: string) => {
-    // Pull the first product image alongside basic product info so the 3D view
-    // can render real photos instead of category emojis.
-    // Defense in depth: explicit user_id filter on top of RLS.
     const { data, error } = await supabase
       .from('wardrobe_items')
       .select(`
-        id, product_id, added_at, notes, is_favorite,
+        id,
+        product_id,
+        added_at,
+        notes,
+        is_favorite,
         products(
-          katrya_id, brand, model_name, category, status,
+          katrya_id,
+          brand,
+          model_name,
+          category,
+          status,
           product_images(url, position)
         )
       `)
       .eq('user_id', userId)
       .order('added_at', { ascending: false })
+
     if (error) {
       console.error('[wardrobe] loadWardrobe error:', error.message)
-      setDebugMsg('load error: ' + error.message)
       return
     }
-    setDebugMsg(`loaded ${data?.length ?? 0} items for user ${userId.slice(0, 8)}…`)
     if (data) setItems(data as any)
   }
 
@@ -179,7 +159,9 @@ export default function WardrobePage() {
     setItems([])
   }
 
-  const displayedItems = filter === 'favorites' ? items.filter(i => i.is_favorite) : items
+  const displayedItems = filter === 'favorites'
+    ? items.filter(i => i.is_favorite)
+    : items
 
   // Map to 3D items: pick the lowest-position image as the visual
   const items3D: Wardrobe3DItem[] = displayedItems
@@ -204,161 +186,133 @@ export default function WardrobePage() {
     .filter((x): x is Wardrobe3DItem => x !== null)
 
   const categoryEmoji: Record<string, string> = {
-    outerwear: '🧥',
-    tops: '👕',
-    bottoms: '👖',
-    shoes: '👟',
-    accessories: '👜',
-    default: '👗'
+    outerwear: '\uD83E\uDDE5',
+    tops: '\uD83D\uDC55',
+    bottoms: '\uD83D\uDC56',
+    shoes: '\uD83D\uDC5F',
+    accessories: '\uD83D\uDC5C',
+    default: '\uD83D\uDC57'
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-gray-500 text-sm text-center">
-          <div>Chargement...</div>
-          <div className="mt-2 text-xs text-gray-700">{debugMsg}</div>
-        </div>
-      </main>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-gray-500 text-sm animate-pulse">Chargement...</div>
+      </div>
     )
   }
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
-        <div className="max-w-sm w-full text-center">
-          <p className="text-4xl mb-4">👗</p>
-          <h1 className="text-2xl font-bold mb-2">Mon Dressing</h1>
-          <p className="text-gray-400 mb-8 text-sm">Connecte-toi pour accéder à ta collection personnelle KATRYA</p>
-          <Link
-            href="/wardrobe/login"
-            className="block w-full bg-white text-black py-3 rounded-xl font-semibold hover:bg-gray-100 transition"
-          >
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 px-4">
+        <div className="text-6xl">👗</div>
+        <h1 className="text-2xl font-bold text-white">Mon Dressing</h1>
+        <p className="text-gray-400 text-center max-w-sm">
+          Connecte-toi pour accéder à ta collection personnelle KATRYA
+        </p>
+        <div className="flex gap-3">
+          <Link href="/admin/login" className="px-6 py-3 bg-white text-black rounded-full font-medium hover:bg-gray-100 transition">
             Se connecter
           </Link>
-          <Link href="/" className="block mt-4 text-gray-500 text-sm hover:text-gray-300">
+          <Link href="/" className="px-6 py-3 bg-gray-900 text-gray-300 rounded-full font-medium hover:bg-gray-800 transition">
             Retour à l&apos;accueil
           </Link>
         </div>
-      </main>
+      </div>
     )
   }
 
   // 3D fullscreen layout
   if (view === '3d') {
     return (
-      <main className="h-screen w-screen bg-black text-white overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-900 bg-black/80 backdrop-blur z-10">
+      <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur border-b border-white/10">
           <div>
-            <h1 className="text-lg font-bold">👗 Mon Dressing 3D</h1>
-            <p className="text-xs text-gray-500">
+            <h1 className="text-white font-semibold text-sm">👗 Mon Dressing 3D</h1>
+            <p className="text-gray-400 text-xs">
               {displayedItems.length} pièce{displayedItems.length !== 1 ? 's' : ''}
               {filter === 'favorites' && ' · favoris'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setView('2d')}
-              className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition"
-            >
-              ← Vue grille
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="text-xs text-gray-500 hover:text-gray-300 transition px-2"
-            >
-              Déconnexion
-            </button>
-          </div>
+          <button
+            onClick={() => setView('2d')}
+            className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition"
+          >
+            ← Vue grille
+          </button>
+          <button onClick={handleSignOut} className="px-3 py-1.5 rounded-full text-xs text-gray-500 hover:text-gray-300 transition">
+            Déconnexion
+          </button>
         </div>
-        <div className="flex-1 relative">
+        <div className="flex-1">
           <Wardrobe3D items={items3D} />
         </div>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      {/* DEBUG banner — retire-le quand tout est confirmé OK */}
-      <div className="bg-yellow-950/40 border-b border-yellow-900/50 text-yellow-200 text-xs px-4 py-1 font-mono flex items-center justify-between gap-3">
-        <span className="truncate">
-          debug: {debugMsg} · user={user?.email ?? '?'} · items={items.length}
-        </span>
-        <button
-          onClick={resetSession}
-          className="shrink-0 text-yellow-300 underline hover:text-yellow-100"
-          title="Vide la session Supabase et recharge la page"
-        >
-          Réinitialiser la session
-        </button>
-      </div>
-
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="sticky top-0 bg-black border-b border-gray-900 px-4 py-4 z-10">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-black/95 backdrop-blur border-b border-white/10 px-4 py-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">👗 Mon Dressing</h1>
-            <p className="text-xs text-gray-500">{items.length} pièce{items.length !== 1 ? 's' : ''}</p>
+            <p className="text-gray-500 text-xs mt-0.5">{items.length} pièce{items.length !== 1 ? 's' : ''}</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-gray-500 hover:text-gray-300 transition"
-          >
+          <button onClick={handleSignOut} className="text-xs text-gray-600 hover:text-gray-400 transition">
             Déconnexion
           </button>
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto p-4">
-        {/* Filtres + toggle vue */}
-        {items.length > 0 && (
-          <div className="flex gap-2 mb-6 items-center justify-between flex-wrap">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  filter === 'all'
-                    ? 'bg-white text-black'
-                    : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-                }`}
-              >
-                Tout ({items.length})
-              </button>
-              <button
-                onClick={() => setFilter('favorites')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  filter === 'favorites'
-                    ? 'bg-white text-black'
-                    : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-                }`}
-              >
-                ♥ Favoris ({items.filter(i => i.is_favorite).length})
-              </button>
-            </div>
-            <button
-              onClick={() => setView('3d')}
-              className="px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition flex items-center gap-1.5"
-              title="Voir mon dressing en 3D"
-            >
-              <span>✨</span>
-              <span>Vue 3D</span>
-            </button>
-          </div>
-        )}
+      {/* Filtres + toggle vue */}
+      {items.length > 0 && (
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+              filter === 'all'
+                ? 'bg-white text-black'
+                : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+            }`}
+          >
+            Tout ({items.length})
+          </button>
+          <button
+            onClick={() => setFilter('favorites')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+              filter === 'favorites'
+                ? 'bg-white text-black'
+                : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+            }`}
+          >
+            ♥ Favoris ({items.filter(i => i.is_favorite).length})
+          </button>
+          <button
+            onClick={() => setView('3d')}
+            className="px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition flex items-center gap-1.5"
+            title="Voir mon dressing en 3D"
+          >
+            <span aria-hidden>\u2728</span>
+            <span>Vue 3D</span>
+          </button>
+        </div>
+      )}
 
-        {/* Grille des articles */}
+      {/* Grille des articles */}
+      <div className="max-w-4xl mx-auto px-4 pb-12">
         {displayedItems.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-5xl mb-4">{filter === 'favorites' ? '♥' : '👗'}</p>
-            <p className="text-gray-400 text-sm">
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+            <div className="text-5xl">{filter === 'favorites' ? '\u2665' : '\uD83D\uDC57'}</div>
+            <p className="text-gray-500 text-sm whitespace-pre-line">
               {filter === 'favorites'
-                ? 'Aucun favori pour l’instant.'
+                ? 'Aucun favori pour l\u2019instant.'
                 : 'Ton dressing est vide.\nScanne une puce NFC KATRYA pour commencer !'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {displayedItems.map(item => {
               const p = item.products
               const emoji = categoryEmoji[p?.category] || categoryEmoji.default
@@ -367,67 +321,61 @@ export default function WardrobePage() {
                 .sort((a, b) => a.position - b.position)
               const cover = sortedImages[0]?.url
               return (
-                <div
-                  key={item.id}
-                  className="bg-gray-950 border border-gray-800 rounded-2xl p-4 relative"
-                >
+                <div key={item.id} className="bg-gray-950 rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition group">
                   {/* Image ou Emoji catégorie */}
-                  {cover ? (
-                    <div className="aspect-square mb-3 rounded-xl overflow-hidden bg-gray-900">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={cover}
-                        alt={p?.model_name || ''}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none'
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-3xl mb-3 text-center">{emoji}</div>
-                  )}
-
+                  <div className="aspect-square bg-gray-900 flex items-center justify-center relative overflow-hidden">
+                    {cover ? (
+                      <div className="w-full h-full">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={cover}
+                          alt={p?.model_name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-4xl">{emoji}</span>
+                    )}
+                  </div>
                   {/* Infos */}
-                  <Link href={`/p/${p?.katrya_id}`}>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider">{p?.brand}</p>
-                    <p className="font-semibold text-sm mt-0.5 leading-tight">{p?.model_name}</p>
-                    <p className="text-xs text-gray-600 mt-1 capitalize">{p?.category}</p>
-                  </Link>
-
-                  {/* ID */}
-                  <p className="text-xs font-mono text-gray-700 mt-2">{p?.katrya_id}</p>
-
-                  {/* Actions */}
-                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-800">
-                    <button
-                      onClick={() => toggleFavorite(item.id, item.is_favorite)}
-                      className={`text-lg transition ${
-                        item.is_favorite ? 'text-red-400' : 'text-gray-700 hover:text-gray-400'
-                      }`}
-                      title={item.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-                    >
-                      {item.is_favorite ? '♥' : '♡'}
-                    </button>
-                    <button
-                      onClick={() => removeFromWardrobe(item.id)}
-                      className="text-xs text-gray-700 hover:text-red-400 transition"
-                      title="Retirer du dressing"
-                    >
-                      ✕
-                    </button>
+                  <div className="p-3">
+                    <p className="text-xs text-gray-400 font-medium truncate">{p?.brand}</p>
+                    <p className="text-sm text-white font-semibold truncate mt-0.5">{p?.model_name}</p>
+                    <p className="text-xs text-gray-600 truncate">{p?.category}</p>
+                    {/* ID */}
+                    <p className="text-xs text-cyan-700 font-mono mt-1">{p?.katrya_id}</p>
+                    {/* Actions */}
+                    <div className="flex items-center justify-between mt-2">
+                      <button
+                        onClick={() => toggleFavorite(item.id, item.is_favorite)}
+                        className={`text-lg transition ${
+                          item.is_favorite ? 'text-red-400' : 'text-gray-700 hover:text-gray-400'
+                        }`}
+                        title={item.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                      >
+                        {item.is_favorite ? '\u2665' : '\u2661'}
+                      </button>
+                      <button
+                        onClick={() => removeFromWardrobe(item.id)}
+                        className="text-xs text-gray-700 hover:text-red-400 transition"
+                        title="Retirer du dressing"
+                      >
+                        \u2715
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
         )}
-
-        {/* Date d'ajout */}
-        <p className="text-center text-xs text-gray-700 mt-8">
-          {user.email}
-        </p>
       </div>
-    </main>
+
+      {/* Footer user */}
+      <div className="max-w-4xl mx-auto px-4 pb-6 text-center">
+        <p className="text-gray-800 text-xs">{user.email}</p>
+      </div>
+    </div>
   )
 }
