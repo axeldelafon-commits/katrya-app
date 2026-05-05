@@ -3,12 +3,12 @@
  * POST /api/nft/transfer
  *
  * Transfère le NFT d'un produit KATRYA vers le wallet d'un client.
- * Appelé automatiquement quand un utilisateur ajoute un produit à son dressing.
+ * Utilise ethers.js + Alchemy (stack 100% gratuit).
  *
  * Body JSON attendu :
  * {
- *   productId: string       // UUID Supabase du produit
- *   toAddress: string       // adresse wallet du client (ou email pour embedded wallet)
+ *   productId: string      // UUID Supabase du produit
+ *   toAddress: string      // adresse wallet du client
  * }
  *
  * Réponse JSON :
@@ -16,88 +16,95 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { THIRDWEB_CONFIG, type TransferResult } from '@/lib/thirdweb'
+import { transferKatryaNFT, checkNFTConfig } from '@/lib/nft'
+import { createClient } from '@supabase/supabase-js'
 
-export async function POST(req: NextRequest): Promise<NextResponse<TransferResult>> {
-  // 1. Auth
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ success: false, error: 'Non autorisé' }, { status: 401 })
-  }
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-  // 2. Parse body
-  let body: any
+export async function POST(request: NextRequest) {
   try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ success: false, error: 'Body JSON invalide' }, { status: 400 })
-  }
+    // --- Vérification config ---
+    const config = checkNFTConfig()
+    if (!config.ok) {
+      return NextResponse.json(
+        { success: false, error: `Configuration manquante: ${config.missing.join(', ')}` },
+        { status: 500 }
+      )
+    }
 
-  const { productId, toAddress } = body
-  if (!productId || !toAddress) {
-    return NextResponse.json({ success: false, error: 'productId et toAddress sont requis' }, { status: 400 })
-  }
+    // --- Lecture du body ---
+    const body = await request.json()
+    const { productId, toAddress } = body
 
-  // 3. Récupérer le token ID du produit
-  const { data: product } = await supabase
-    .from('products')
-    .select('nft_token_id, nft_contract_address, nft_chain')
-    .eq('id', productId)
-    .single()
+    if (!productId || !toAddress) {
+      return NextResponse.json(
+        { success: false, error: 'Champs obligatoires manquants: productId, toAddress' },
+        { status: 400 }
+      )
+    }
 
-  if (!product?.nft_token_id) {
-    return NextResponse.json({
-      success: false,
-      error: 'Ce produit n\'a pas encore de NFT. Mintez-le d\'abord via /api/nft/mint.'
-    }, { status: 404 })
-  }
+    // --- Récupération du NFT en base ---
+    const { data: nft, error: fetchError } = await supabase
+      .from('nft_certificates')
+      .select('token_id, owner_address, status')
+      .eq('product_id', productId)
+      .single()
 
-  // 4. Vérifier config Thirdweb
-  if (!THIRDWEB_CONFIG.secretKey || !THIRDWEB_CONFIG.contractAddress || !THIRDWEB_CONFIG.adminPrivateKey) {
-    return NextResponse.json({
-      success: false,
-      error: 'Configuration Thirdweb manquante'
-    }, { status: 503 })
-  }
+    if (fetchError || !nft) {
+      return NextResponse.json(
+        { success: false, error: 'NFT introuvable pour ce produit. Mintez-le d\'abord.' },
+        { status: 404 }
+      )
+    }
 
-  // 5. Transfert via Thirdweb SDK
-  try {
-    const { ThirdwebSDK } = await import('@thirdweb-dev/sdk')
+    if (nft.owner_address?.toLowerCase() === toAddress.toLowerCase()) {
+      return NextResponse.json({
+        success: true,
+        message: 'Le wallet est déjà propriétaire de ce NFT',
+      })
+    }
 
-    const sdk = ThirdwebSDK.fromPrivateKey(
-      THIRDWEB_CONFIG.adminPrivateKey,
-      'polygon',
-      { secretKey: THIRDWEB_CONFIG.secretKey }
-    )
-
-    const contract = await sdk.getContract(
-      product.nft_contract_address || THIRDWEB_CONFIG.contractAddress,
-      'nft-collection'
-    )
-
-    const tx = await contract.transfer(toAddress, product.nft_token_id)
-    const transactionHash = tx.receipt.transactionHash
-
-    // 6. Enregistrer le transfert en base (historique de propriété)
-    await supabase.from('nft_transfers').insert({
-      product_id: productId,
-      token_id: product.nft_token_id,
-      from_address: await sdk.wallet.getAddress(),
-      to_address: toAddress,
-      transaction_hash: transactionHash,
-      chain: 'polygon',
-      transferred_by: user.id,
+    // --- Transfert NFT ---
+    const result = await transferKatryaNFT({
+      tokenId: parseInt(nft.token_id),
+      toAddress,
     })
 
-    return NextResponse.json({ success: true, transactionHash })
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error },
+        { status: 500 }
+      )
+    }
 
-  } catch (err: any) {
-    console.error('[nft/transfer] Transfer error:', err)
+    // --- Mise à jour en base ---
+    const { error: updateError } = await supabase
+      .from('nft_certificates')
+      .update({
+        owner_address: toAddress,
+        status: 'transferred',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('product_id', productId)
+
+    if (updateError) {
+      console.error('[NFT Transfer] DB update error:', updateError)
+    }
+
     return NextResponse.json({
-      success: false,
-      error: err?.message ?? 'Erreur lors du transfert NFT',
-    }, { status: 500 })
+      success: true,
+      transactionHash: result.transactionHash,
+      toAddress,
+    })
+
+  } catch (error) {
+    console.error('[NFT Transfer] Unexpected error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Erreur serveur inattendue' },
+      { status: 500 }
+    )
   }
 }
