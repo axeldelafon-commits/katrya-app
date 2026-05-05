@@ -3,18 +3,18 @@
  * POST /api/nft/mint
  *
  * Minte un NFT ERC-721 sur Polygon pour un produit KATRYA.
- * Appelé depuis l'admin lors de la création / validation d'un produit.
+ * Utilise ethers.js + Alchemy (stack 100% gratuit).
  *
  * Body JSON attendu :
  * {
- *   productId: string     // UUID Supabase du produit
- *   katryaId: string      // katrya_id (ex: KTR-0042)
+ *   productId: string      // UUID Supabase du produit
+ *   katryaId: string       // katrya_id (ex: KTR-0042)
  *   brand: string
  *   modelName: string
  *   category: string
  *   status: string
  *   description?: string
- *   imageUrl?: string     // URL image principale
+ *   imageUrl?: string      // URL image principale
  *   recipientAddress?: string  // wallet admin par défaut si absent
  * }
  *
@@ -23,127 +23,125 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { buildNFTMetadata, THIRDWEB_CONFIG, type MintResult } from '@/lib/thirdweb'
+import { mintKatryaNFT, buildNFTMetadata, metadataToDataURI, checkNFTConfig } from '@/lib/nft'
+import { createClient } from '@supabase/supabase-js'
 
-export async function POST(req: NextRequest): Promise<NextResponse<MintResult>> {
-  // 1. Vérification admin
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ success: false, error: 'Non autorisé' }, { status: 401 })
-  }
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-  // 2. Parse body
-  let body: any
+export async function POST(request: NextRequest) {
   try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ success: false, error: 'Body JSON invalide' }, { status: 400 })
-  }
+    // --- Vérification config ---
+    const config = checkNFTConfig()
+    if (!config.ok) {
+      return NextResponse.json(
+        { success: false, error: `Configuration manquante: ${config.missing.join(', ')}` },
+        { status: 500 }
+      )
+    }
 
-  const { productId, katryaId, brand, modelName, category, status, description, imageUrl, recipientAddress } = body
+    // --- Lecture du body ---
+    const body = await request.json()
+    const {
+      productId,
+      katryaId,
+      brand,
+      modelName,
+      category,
+      status,
+      description,
+      imageUrl,
+      recipientAddress,
+    } = body
 
-  if (!productId || !katryaId || !brand || !modelName) {
-    return NextResponse.json({ success: false, error: 'Champs requis manquants' }, { status: 400 })
-  }
+    if (!productId || !katryaId || !brand || !modelName || !category) {
+      return NextResponse.json(
+        { success: false, error: 'Champs obligatoires manquants: productId, katryaId, brand, modelName, category' },
+        { status: 400 }
+      )
+    }
 
-  // 3. Vérifier que le produit n'a pas déjà un NFT
-  const { data: existing } = await supabase
-    .from('products')
-    .select('nft_token_id')
-    .eq('id', productId)
-    .single()
+    // --- Vérification doublons ---
+    const { data: existing } = await supabase
+      .from('nft_certificates')
+      .select('token_id, transaction_hash')
+      .eq('product_id', productId)
+      .single()
 
-  if (existing?.nft_token_id) {
-    return NextResponse.json({
-      success: false,
-      error: 'Ce produit possède déjà un NFT (token #' + existing.nft_token_id + ')'
-    }, { status: 409 })
-  }
-
-  // 4. Vérifier la configuration Thirdweb
-  if (!THIRDWEB_CONFIG.secretKey || !THIRDWEB_CONFIG.contractAddress || !THIRDWEB_CONFIG.adminPrivateKey) {
-    return NextResponse.json({
-      success: false,
-      error: 'Configuration Thirdweb manquante. Vérifiez les variables d\'environnement : THIRDWEB_SECRET_KEY, THIRDWEB_CONTRACT_ADDRESS, KATRYA_ADMIN_PRIVATE_KEY'
-    }, { status: 503 })
-  }
-
-  // 5. Construire les métadonnées NFT
-  const metadata = buildNFTMetadata({
-    katrya_id: katryaId,
-    brand,
-    model_name: modelName,
-    category: category ?? 'unknown',
-    status: status ?? 'available',
-    description: description ?? null,
-    imageUrl: imageUrl ?? null,
-  })
-
-  // 6. Mint via Thirdweb SDK (import dynamique pour éviter le bundle côté client)
-  try {
-    // Import dynamique du SDK Thirdweb (server-side uniquement)
-    const { ThirdwebSDK } = await import('@thirdweb-dev/sdk')
-
-    const sdk = ThirdwebSDK.fromPrivateKey(
-      THIRDWEB_CONFIG.adminPrivateKey,
-      'polygon',
-      { secretKey: THIRDWEB_CONFIG.secretKey }
-    )
-
-    const contract = await sdk.getContract(THIRDWEB_CONFIG.contractAddress, 'nft-collection')
-
-    // Mint vers l'adresse spécifiée (client) ou le wallet admin KATRYA par défaut
-    const mintTo = recipientAddress || await sdk.wallet.getAddress()
-
-    const tx = await contract.mintTo(mintTo, {
-      name: metadata.name,
-      description: metadata.description,
-      image: metadata.image,
-      attributes: metadata.attributes,
-    })
-
-    const tokenId = tx.id.toString()
-    const transactionHash = tx.receipt.transactionHash
-
-    // 7. Sauvegarder le token ID en base Supabase
-    const { error: updateError } = await supabase
-      .from('products')
-      .update({
-        nft_token_id: tokenId,
-        nft_contract_address: THIRDWEB_CONFIG.contractAddress,
-        nft_chain: 'polygon',
-      })
-      .eq('id', productId)
-
-    if (updateError) {
-      console.error('[nft/mint] Supabase update error:', updateError)
-      // Le NFT est minté mais l'update a échoué : on retourne quand même le succès
-      // avec un warning pour que l'admin puisse corriger manuellement
+    if (existing) {
       return NextResponse.json({
         success: true,
-        tokenId,
-        transactionHash,
-        contractAddress: THIRDWEB_CONFIG.contractAddress,
-        chain: 'polygon',
-        error: 'NFT minté avec succès mais la mise à jour Supabase a échoué. TokenID: ' + tokenId,
+        tokenId: existing.token_id,
+        transactionHash: existing.transaction_hash,
+        message: 'NFT déjà minté pour ce produit',
       })
+    }
+
+    // --- Construction métadonnées ---
+    const metadata = buildNFTMetadata({
+      katryaId,
+      brand,
+      modelName,
+      category,
+      status: status || 'authentic',
+      description,
+      imageUrl,
+    })
+
+    const tokenURI = metadataToDataURI(metadata)
+
+    // --- Mint NFT ---
+    const recipient = recipientAddress || process.env.KATRYA_ADMIN_WALLET_ADDRESS!
+
+    const result = await mintKatryaNFT({
+      recipientAddress: recipient,
+      tokenURI,
+      metadata,
+    })
+
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error },
+        { status: 500 }
+      )
+    }
+
+    // --- Sauvegarde en base ---
+    const { error: dbError } = await supabase
+      .from('nft_certificates')
+      .insert({
+        product_id: productId,
+        katrya_id: katryaId,
+        token_id: result.tokenId?.toString(),
+        transaction_hash: result.transactionHash,
+        contract_address: process.env.KATRYA_NFT_CONTRACT_ADDRESS,
+        chain: 'polygon',
+        token_uri: tokenURI,
+        owner_address: recipient,
+        metadata: metadata,
+        status: 'minted',
+      })
+
+    if (dbError) {
+      console.error('[NFT Mint] DB error:', dbError)
+      // NFT minté mais non sauvegardé — on retourne quand même le succès
     }
 
     return NextResponse.json({
       success: true,
-      tokenId,
-      transactionHash,
-      contractAddress: THIRDWEB_CONFIG.contractAddress,
+      tokenId: result.tokenId?.toString(),
+      transactionHash: result.transactionHash,
+      contractAddress: process.env.KATRYA_NFT_CONTRACT_ADDRESS,
       chain: 'polygon',
     })
 
-  } catch (err: any) {
-    console.error('[nft/mint] Mint error:', err)
-    return NextResponse.json({
-      success: false,
-      error: err?.message ?? 'Erreur lors du mint NFT',
-    }, { status: 500 })
+  } catch (error) {
+    console.error('[NFT Mint] Unexpected error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Erreur serveur inattendue' },
+      { status: 500 }
+    )
   }
 }
