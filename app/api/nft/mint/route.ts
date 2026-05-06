@@ -95,11 +95,7 @@ export async function POST(request: NextRequest) {
     // --- Mint NFT ---
     const recipient = recipientAddress || process.env.KATRYA_ADMIN_WALLET_ADDRESS!
 
-    const result = await mintKatryaNFT({
-      recipientAddress: recipient,
-      tokenURI,
-      metadata,
-    })
+    const result = await mintKatryaNFT(recipient, metadata)
 
     if (!result.success) {
       return NextResponse.json(
