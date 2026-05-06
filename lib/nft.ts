@@ -1,3 +1,4 @@
+import { ethers } from 'ethers'
 /**
  * lib/nft.ts
  * Couche NFT/Blockchain pour KATRYA
@@ -142,4 +143,97 @@ export function checkNFTConfig(): { ok: boolean; missing: string[] } {
   if (!NFT_CONFIG.contractAddress) missing.push('KATRYA_NFT_CONTRACT_ADDRESS')
   if (!NFT_CONFIG.adminPrivateKey)  missing.push('KATRYA_ADMIN_PRIVATE_KEY')
   return { ok: missing.length === 0, missing }
+}
+
+
+// ───── Mint NFT ─────────────────────────────────────────────────────────────
+
+export async function mintKatryaNFT(
+  to: string,
+  metadata: NFTMetadata
+): Promise<MintResult> {
+  const { ok, missing } = checkNFTConfig()
+  if (!ok) {
+    return {
+      success: false,
+      error: `Missing env vars: ${missing.join(', ')}`
+    }
+  }
+
+  try {
+    const tokenURI = metadataToDataURI(metadata)
+    const contractAddress = process.env.KATRYA_NFT_CONTRACT_ADDRESS!
+    const rpcUrl = getPolygonRpcUrl()
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    const wallet = new ethers.Wallet(
+      process.env.KATRYA_ADMIN_PRIVATE_KEY!,
+      provider
+    )
+
+    const abi = [
+      'function mint(address to, string memory tokenURI) public returns (uint256)',
+      'function totalSupply() public view returns (uint256)'
+    ]
+
+    const contract = new ethers.Contract(contractAddress, abi, wallet)
+    const tx = await contract.mint(to, tokenURI)
+    const receipt = await tx.wait()
+
+    const tokenId = await contract.totalSupply()
+
+    return {
+      success: true,
+      tokenId: (Number(tokenId) - 1).toString(),
+      transactionHash: receipt.hash
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      error: msg
+    }
+  }
+}
+
+
+export async function transferKatryaNFT({
+  tokenId,
+  toAddress,
+}: {
+  tokenId: number
+  toAddress: string
+}): Promise<TransferResult> {
+  const { ok, missing } = checkNFTConfig()
+  if (!ok) {
+    return {
+      success: false,
+      error: `Missing env vars: ${missing.join(', ')}`,
+    }
+  }
+  try {
+    const contractAddress = process.env.KATRYA_NFT_CONTRACT_ADDRESS!
+    const rpcUrl = getPolygonRpcUrl()
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    const wallet = new ethers.Wallet(
+      process.env.KATRYA_ADMIN_PRIVATE_KEY!,
+      provider
+    )
+    const abi = [
+      'function safeTransferFrom(address from, address to, uint256 tokenId) public',
+    ]
+    const contract = new ethers.Contract(contractAddress, abi, wallet)
+    const tx = await contract.safeTransferFrom(wallet.address, toAddress, tokenId)
+    const receipt = await tx.wait()
+    return {
+      success: true,
+      transactionHash: receipt.hash,
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      error: msg,
+    }
+  }
 }

@@ -35,7 +35,7 @@ interface WardrobeItem {
 // Menu de navigation Katrya simple
 function KatryaMenu() {
   return (
-    <div className="sticky top-0 z-20 bg-black border-b border-white/5">
+    <nav className="sticky top-0 z-20 bg-black border-b border-white/5">
       <div className="max-w-4xl mx-auto px-4 h-12 flex items-center">
         <Link
           href="/"
@@ -44,7 +44,7 @@ function KatryaMenu() {
           KATRYA
         </Link>
       </div>
-    </div>
+    </nav>
   )
 }
 
@@ -65,7 +65,7 @@ export default function WardrobePage() {
       setLoading(false)
     }, 8000)
 
-    const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
       return Promise.race([
         promise,
         new Promise<T>((_, reject) =>
@@ -75,6 +75,7 @@ export default function WardrobePage() {
     }
 
     let didLoad = false
+
     const tryLoad = async (sessionUser: any) => {
       if (didLoad || !sessionUser) return
       didLoad = true
@@ -204,27 +205,26 @@ export default function WardrobePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Chargement...
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p className="text-gray-500 text-sm">Chargement...</p>
       </div>
     )
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white gap-6 px-4">
-        <KatryaMenu />
-        <div className="text-5xl">\uD83D\uDC57</div>
-        <h1 className="text-2xl font-bold">Mon Dressing</h1>
-        <p className="text-gray-400 text-center">
-          Connecte-toi pour accéder à ta collection personnelle KATRYA
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 px-4">
+        <div className="text-6xl">\uD83D\uDC57</div>
+        <h1 className="text-2xl font-bold tracking-widest uppercase">Mon Dressing</h1>
+        <p className="text-gray-400 text-sm text-center max-w-xs">
+          Connecte-toi pour acc\u00E9der \u00E0 ta collection personnelle KATRYA
         </p>
         <div className="flex gap-3">
-          <Link href="/wardrobe/login" className="px-6 py-3 bg-white text-black rounded-full font-semibold hover:bg-gray-100 transition">
+          <Link href="/auth" className="px-6 py-2.5 bg-white text-black text-sm font-semibold rounded-full hover:opacity-90 transition">
             Se connecter
           </Link>
-          <Link href="/" className="px-6 py-3 bg-gray-900 text-white rounded-full hover:bg-gray-800 transition">
-            Retour à l'accueil
+          <Link href="/" className="px-6 py-2.5 bg-gray-900 text-gray-300 text-sm font-semibold rounded-full hover:bg-gray-800 transition">
+            Retour \u00E0 l&apos;accueil
           </Link>
         </div>
       </div>
@@ -234,30 +234,27 @@ export default function WardrobePage() {
   // 3D fullscreen layout
   if (view === '3d') {
     return (
-      <div className="fixed inset-0 bg-black z-50 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur border-b border-white/10">
-          <Link href="/" className="text-white font-semibold tracking-widest text-xs uppercase hover:opacity-70 transition mr-4">
-            KATRYA
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-white font-semibold text-sm">\uD83D\uDC57 Mon Dressing 3D</h1>
-            <p className="text-gray-400 text-xs">
-              {displayedItems.length} pièce{displayedItems.length !== 1 ? 's' : ''}
-              {filter === 'favorites' && ' · favoris'}
+      <div className="min-h-screen bg-black flex flex-col">
+        <KatryaMenu />
+        <div className="px-4 py-3 flex items-center justify-between border-b border-white/5">
+          <div>
+            <h1 className="text-lg font-bold tracking-widest uppercase">\uD83D\uDC57 Mon Dressing 3D</h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {displayedItems.length} pi\u00E8ce{displayedItems.length !== 1 ? 's' : ''}
+              {filter === 'favorites' && ' \u00B7 favoris'}
             </p>
           </div>
-          <button
-            onClick={() => setView('2d')}
-            className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition mr-2"
-          >
-            ← Vue grille
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="px-3 py-1.5 rounded-full text-xs text-gray-500 hover:text-gray-300 transition"
-          >
-            Déconnexion
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setView('2d')}
+              className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 transition mr-2"
+            >
+              \u2190 Vue grille
+            </button>
+            <button onClick={handleSignOut} className="text-xs text-gray-500 hover:text-gray-300 transition">
+              D\u00E9connexion
+            </button>
+          </div>
         </div>
         <div className="flex-1">
           <Wardrobe3D items={items3D} />
@@ -272,64 +269,60 @@ export default function WardrobePage() {
       <KatryaMenu />
 
       {/* Header dressing */}
-      <div className="sticky top-12 z-10 bg-black/95 backdrop-blur border-b border-white/10 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <div className="max-w-4xl mx-auto px-4 pt-8 pb-4">
+        <div className="flex items-end justify-between">
           <div>
-            <h1 className="text-xl font-bold">\uD83D\uDC57 Mon Dressing</h1>
-            <p className="text-gray-500 text-xs mt-0.5">{items.length} pièce{items.length !== 1 ? 's' : ''}</p>
+            <h1 className="text-2xl font-bold tracking-widest uppercase">\uD83D\uDC57 Mon Dressing</h1>
+            <p className="text-xs text-gray-500 mt-1">{items.length} pi\u00E8ce{items.length !== 1 ? 's' : ''}</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-gray-600 hover:text-gray-400 transition"
-          >
-            Déconnexion
+          <button onClick={handleSignOut} className="text-xs text-gray-500 hover:text-gray-300 transition">
+            D\u00E9connexion
           </button>
         </div>
+
+        {/* Filtres + toggle vue */}
+        {items.length > 0 && (
+          <div className="flex gap-2 mt-4 flex-wrap">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                filter === 'all' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+              }`}
+            >
+              Tout ({items.length})
+            </button>
+            <button
+              onClick={() => setFilter('favorites')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                filter === 'favorites' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
+              }`}
+            >
+              \u2665 Favoris ({items.filter(i => i.is_favorite).length})
+            </button>
+            <button
+              onClick={() => setView('3d')}
+              className="px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition flex items-center gap-1.5"
+              title="Voir mon dressing en 3D"
+            >
+              \u2728 Vue 3D
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Filtres + toggle vue */}
-      {items.length > 0 && (
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-              filter === 'all' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-            }`}
-          >
-            Tout ({items.length})
-          </button>
-          <button
-            onClick={() => setFilter('favorites')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-              filter === 'favorites' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-            }`}
-          >
-            \u2665 Favoris ({items.filter(i => i.is_favorite).length})
-          </button>
-          <button
-            onClick={() => setView('3d')}
-            className="px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition flex items-center gap-1.5"
-            title="Voir mon dressing en 3D"
-          >
-            <span aria-hidden>\u2728</span>
-            <span>Vue 3D</span>
-          </button>
-        </div>
-      )}
-
       {/* Grille des articles */}
-      <div className="max-w-4xl mx-auto px-4 pb-16">
+      <div className="max-w-4xl mx-auto px-4 pb-12">
         {displayedItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="text-5xl">{filter === 'favorites' ? '\u2665' : '\uD83D\uDC57'}</div>
-            <p className="text-gray-400 text-sm max-w-xs whitespace-pre-line">
+            <p className="text-gray-500 text-sm text-center whitespace-pre-line">
               {filter === 'favorites'
                 ? 'Aucun favori pour l\u2019instant.'
                 : 'Ton dressing est vide.\nScanne une puce NFC KATRYA pour commencer !'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {displayedItems.map(item => {
               const p = item.products
               const emoji = categoryEmoji[p?.category] || categoryEmoji.default
@@ -338,11 +331,11 @@ export default function WardrobePage() {
                 .sort((a, b) => a.position - b.position)
               const cover = sortedImages[0]?.url
               return (
-                <div key={item.id} className="bg-gray-900 rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition group">
-                  {/* Image ou Emoji catégorie */}
-                  <div className="relative aspect-square bg-gray-800 flex items-center justify-center">
+                <div key={item.id} className="bg-gray-950 border border-white/5 rounded-2xl overflow-hidden flex flex-col">
+                  {/* Image ou Emoji cat\u00E9gorie */}
+                  <div className="aspect-square bg-gray-900 flex items-center justify-center relative">
                     {cover ? (
-                      <div className="relative w-full h-full">
+                      <div className="w-full h-full">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={cover}
@@ -357,16 +350,16 @@ export default function WardrobePage() {
                   </div>
 
                   {/* Infos */}
-                  <div className="p-3">
-                    <p className="text-white text-sm font-semibold truncate">{p?.brand}</p>
-                    <p className="text-gray-400 text-xs truncate">{p?.model_name}</p>
-                    <p className="text-gray-600 text-xs capitalize mt-0.5">{p?.category}</p>
+                  <div className="p-3 flex flex-col gap-1 flex-1">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">{p?.brand}</p>
+                    <p className="text-sm font-medium leading-tight">{p?.model_name}</p>
+                    <p className="text-xs text-gray-600 capitalize">{p?.category}</p>
 
                     {/* ID */}
-                    <p className="text-gray-700 text-xs font-mono mt-1 truncate">{p?.katrya_id}</p>
+                    <p className="text-xs text-gray-700 font-mono mt-auto pt-2">{p?.katrya_id}</p>
 
                     {/* Actions */}
-                    <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center justify-between mt-2">
                       <button
                         onClick={() => toggleFavorite(item.id, item.is_favorite)}
                         className={`text-lg transition ${
@@ -393,10 +386,8 @@ export default function WardrobePage() {
       </div>
 
       {/* Footer user */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur border-t border-white/5 px-4 py-3">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-gray-600 text-xs">{user.email}</p>
-        </div>
+      <div className="border-t border-white/5 py-4">
+        <p className="text-center text-xs text-gray-700">{user.email}</p>
       </div>
     </div>
   )
