@@ -5,6 +5,7 @@ import LinkTagForm from './link-tag-form'
 import PublishPassportForm from './publish-passport-form'
 import StatusForm from './status-form'
 import ImageUploader from './image-uploader'
+import MintNFTButton from './mint-nft-button'
 
 export default async function ProductDetailPage({
   params
@@ -13,21 +14,17 @@ export default async function ProductDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
-
   const { data: product } = await supabase
     .from('products')
     .select('*')
     .eq('id', id)
     .maybeSingle()
-
   if (!product) notFound()
-
   const { data: tag } = await supabase
     .from('nfc_tags')
     .select('*')
     .eq('product_id', id)
     .maybeSingle()
-
   const { data: latestPassport } = await supabase
     .from('passports')
     .select('*')
@@ -35,14 +32,12 @@ export default async function ProductDetailPage({
     .order('version', { ascending: false })
     .limit(1)
     .maybeSingle()
-
   const { data: events } = await supabase
     .from('events')
     .select('*')
     .eq('product_id', id)
     .order('created_at', { ascending: false })
     .limit(20)
-
   const { data: images } = await supabase
     .from('product_images')
     .select('*')
@@ -57,7 +52,6 @@ export default async function ProductDetailPage({
         </Link>
         <h1 style={{ margin: 0 }}>{product.model_name}</h1>
       </div>
-
       <div style={grid2}>
         <div style={card}>
           <h3 style={{ margin: '0 0 12px' }}>Infos produit</h3>
@@ -77,13 +71,11 @@ export default async function ProductDetailPage({
           <StatusForm productId={id} currentStatus={product.status} />
         </div>
       </div>
-
       {/* Photos du produit - composant interactif */}
       <div style={card}>
         <h3 style={{ margin: '0 0 16px' }}>Photos du produit</h3>
         <ImageUploader productId={id} initialImages={images || []} />
       </div>
-
       <div style={card}>
         <h3 style={{ margin: '0 0 12px' }}>Puce NFC</h3>
         {tag ? (
@@ -98,7 +90,6 @@ export default async function ProductDetailPage({
         )}
         <LinkTagForm productId={id} />
       </div>
-
       <div style={card}>
         <h3 style={{ margin: '0 0 12px' }}>Passeport</h3>
         {latestPassport ? (
@@ -108,13 +99,34 @@ export default async function ProductDetailPage({
         )}
         <PublishPassportForm productId={id} product={{ brand: product.brand, model_name: product.model_name, category: product.category }} />
       </div>
-
       <div style={card}>
-        <h3 style={{ margin: '0 0 12px' }}>Journal d'événements</h3>
+        <h3 style={{ margin: '0 0 12px' }}>Certification Blockchain (NFT Polygon)</h3>
+        <p style={{ fontSize: 13, color: '#888', margin: '0 0 16px' }}>
+          Certifier ce produit sur Polygon Mainnet en mintant un NFT ERC-721 immuable.
+        </p>
+        {product.nft_token_id ? (
+          <div>
+            <p><strong>Token ID :</strong> #{product.nft_token_id}</p>
+            <p>
+              <a
+                href={`https://polygonscan.com/token/${product.nft_contract_address}?a=${product.nft_token_id}`}
+                target="_blank"
+                style={{ color: '#0cf', fontSize: 13 }}
+              >
+                Voir sur Polygonscan ↗
+              </a>
+            </p>
+          </div>
+        ) : (
+          <MintNFTButton productId={id} katryaId={product.katrya_id} />
+        )}
+      </div>
+      <div style={card}>
+        <h3 style={{ margin: '0 0 12px' }}>Journal d’événements</h3>
         {events?.map((ev) => (
           <div key={ev.id} style={{ borderBottom: '1px solid #1a1a1a', paddingBottom: 12, marginBottom: 12 }}>
             <p style={{ margin: '0 0 4px' }}>
-              <strong>{ev.event_type}</strong> <span style={{ color: '#888', fontSize: 12 }}>— {ev.actor_type}</span>
+              <strong>{ev.event_type}</strong> <span style={{ color: '#888', fontSize: 12 }}>&mdash; {ev.actor_type}</span>
             </p>
             <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>
               {new Date(ev.created_at).toLocaleString('fr-FR')}
