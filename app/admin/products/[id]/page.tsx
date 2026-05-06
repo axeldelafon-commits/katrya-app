@@ -118,7 +118,14 @@ export default async function ProductDetailPage({
             </p>
           </div>
         ) : (
-          <MintNFTButton productId={id} katryaId={product.katrya_id} />
+          <MintNFTButton
+            productId={id}
+            katryaId={product.katrya_id}
+            brand={product.brand}
+            modelName={product.model_name}
+            category={product.category}
+            status={product.status}
+          />
         )}
       </div>
       <div style={card}>
