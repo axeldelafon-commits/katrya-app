@@ -194,3 +194,45 @@ export async function mintKatryaNFT(
     }
   }
 }
+
+
+export async function transferKatryaNFT({
+  tokenId,
+  toAddress,
+}: {
+  tokenId: number
+  toAddress: string
+}): Promise<TransferResult> {
+  const { ok, missing } = checkNFTConfig()
+  if (!ok) {
+    return {
+      success: false,
+      error: `Missing env vars: ${missing.join(', ')}`,
+    }
+  }
+  try {
+    const contractAddress = process.env.KATRYA_NFT_CONTRACT_ADDRESS!
+    const rpcUrl = getPolygonRpcUrl()
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    const wallet = new ethers.Wallet(
+      process.env.KATRYA_ADMIN_PRIVATE_KEY!,
+      provider
+    )
+    const abi = [
+      'function safeTransferFrom(address from, address to, uint256 tokenId) public',
+    ]
+    const contract = new ethers.Contract(contractAddress, abi, wallet)
+    const tx = await contract.safeTransferFrom(wallet.address, toAddress, tokenId)
+    const receipt = await tx.wait()
+    return {
+      success: true,
+      transactionHash: receipt.hash,
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    return {
+      success: false,
+      error: msg,
+    }
+  }
+}
