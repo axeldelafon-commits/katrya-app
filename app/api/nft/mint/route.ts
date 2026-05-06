@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     // --- Construction métadonnées ---
     const metadata = buildNFTMetadata({
-      katryaId,
+      katrya_id,
       brand,
       modelName,
       category,
