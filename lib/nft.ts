@@ -1,3 +1,4 @@
+import { ethers } from 'ethers'
 /**
  * lib/nft.ts
  * Couche NFT/Blockchain pour KATRYA
