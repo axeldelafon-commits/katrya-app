@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     const metadata = buildNFTMetadata({
       katrya_id: katryaId,
       brand,
-      modelName,
+      model_name: modelName,
       category,
       status: status || 'authentic',
       description,
