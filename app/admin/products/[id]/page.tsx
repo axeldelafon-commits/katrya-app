@@ -6,6 +6,7 @@ import PublishPassportForm from './publish-passport-form'
 import StatusForm from './status-form'
 import ImageUploader from './image-uploader'
 import MintNFTButton from './mint-nft-button'
+import TransferNFTForm from './transfer-nft-form'
 
 export default async function ProductDetailPage({
   params
@@ -43,6 +44,12 @@ export default async function ProductDetailPage({
     .select('*')
     .eq('product_id', id)
     .order('position', { ascending: true })
+  // Certificat NFT existant
+  const { data: nftCert } = await supabase
+    .from('nft_certificates')
+    .select('*')
+    .eq('product_id', id)
+    .maybeSingle()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -51,6 +58,11 @@ export default async function ProductDetailPage({
           ← Retour
         </Link>
         <h1 style={{ margin: 0 }}>{product.model_name}</h1>
+        {nftCert && (
+          <span style={{ background: '#7c3aed22', border: '1px solid #7c3aed', borderRadius: 6, padding: '2px 10px', fontSize: 12, color: '#a78bfa', fontWeight: 700 }}>
+            ⚡ NFT #{nftCert.token_id}
+          </span>
+        )}
       </div>
       <div style={grid2}>
         <div style={card}>
@@ -71,7 +83,6 @@ export default async function ProductDetailPage({
           <StatusForm productId={id} currentStatus={product.status} />
         </div>
       </div>
-      {/* Photos du produit - composant interactif */}
       <div style={card}>
         <h3 style={{ margin: '0 0 16px' }}>Photos du produit</h3>
         <ImageUploader productId={id} initialImages={images || []} />
@@ -99,35 +110,70 @@ export default async function ProductDetailPage({
         )}
         <PublishPassportForm productId={id} product={{ brand: product.brand, model_name: product.model_name, category: product.category }} />
       </div>
+
+      {/* === SECTION BLOCKCHAIN === */}
       <div style={card}>
-        <h3 style={{ margin: '0 0 12px' }}>Certification Blockchain (NFT Polygon)</h3>
-        <p style={{ fontSize: 13, color: '#888', margin: '0 0 16px' }}>
-          Certifier ce produit sur Polygon Mainnet en mintant un NFT ERC-721 immuable.
-        </p>
-        {product.nft_token_id ? (
+        <h3 style={{ margin: '0 0 4px' }}>Certification Blockchain — NFT Polygon</h3>
+        {nftCert ? (
           <div>
-            <p><strong>Token ID :</strong> #{product.nft_token_id}</p>
-            <p>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '12px 0' }}>
+              <div>
+                <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>Token ID</p>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 18 }}>#{nftCert.token_id}</p>
+              </div>
+              <div>
+                <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>Statut</p>
+                <p style={{ margin: 0, fontWeight: 700, color: nftCert.status === 'transferred' ? '#4ade80' : '#facc15' }}>
+                  {nftCert.status === 'transferred' ? '✅ Transféré au client' : '🔒 Mintué (admin)'}
+                </p>
+              </div>
+              <div>
+                <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>Chain</p>
+                <p style={{ margin: 0, fontWeight: 700, color: '#a78bfa' }}>Polygon Mainnet</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
               <a
-                href={`https://polygonscan.com/token/${product.nft_contract_address}?a=${product.nft_token_id}`}
+                href={`https://polygonscan.com/tx/${nftCert.transaction_hash}`}
                 target="_blank"
-                style={{ color: '#0cf', fontSize: 13 }}
+                style={{ color: '#0cf', fontSize: 12 }}
               >
-                Voir sur Polygonscan ↗
+                Voir transaction mint ↗
               </a>
-            </p>
+              <a
+                href={`https://polygonscan.com/token/${nftCert.contract_address}?a=${nftCert.token_id}`}
+                target="_blank"
+                style={{ color: '#0cf', fontSize: 12 }}
+              >
+                Voir token sur Polygonscan ↗
+              </a>
+            </div>
+            <div style={{ borderTop: '1px solid #222', paddingTop: 16 }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Transférer au client</h4>
+              <TransferNFTForm
+                productId={id}
+                tokenId={nftCert.token_id}
+                currentOwner={nftCert.owner_address}
+              />
+            </div>
           </div>
         ) : (
-          <MintNFTButton
-            productId={id}
-            katryaId={product.katrya_id}
-            brand={product.brand}
-            modelName={product.model_name}
-            category={product.category}
-            status={product.status}
-          />
+          <>
+            <p style={{ fontSize: 13, color: '#888', margin: '8px 0 16px' }}>
+              Aucun NFT minté pour ce produit. Certifiez-le sur Polygon Mainnet.
+            </p>
+            <MintNFTButton
+              productId={id}
+              katryaId={product.katrya_id}
+              brand={product.brand}
+              modelName={product.model_name}
+              category={product.category}
+              status={product.status}
+            />
+          </>
         )}
       </div>
+
       <div style={card}>
         <h3 style={{ margin: '0 0 12px' }}>Journal d’événements</h3>
         {events?.map((ev) => (
