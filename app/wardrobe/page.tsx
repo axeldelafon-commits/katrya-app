@@ -1,5 +1,4 @@
 'use client'
-
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
@@ -16,6 +15,15 @@ const Wardrobe3D = dynamic(() => import('./Wardrobe3D'), {
   ),
 })
 
+interface NftCertificate {
+  token_id: string
+  tx_hash: string
+  contract_address: string
+  network: string
+  owner_address: string | null
+  minted_at: string
+}
+
 interface WardrobeItem {
   id: string
   product_id: string
@@ -30,6 +38,7 @@ interface WardrobeItem {
     status: string
     product_images?: { url: string; position: number }[]
   }
+  nft?: NftCertificate | null
 }
 
 // Menu de navigation Katrya simple
@@ -54,7 +63,6 @@ export default function WardrobePage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'favorites'>('all')
   const [view, setView] = useState<'2d' | '3d'>('2d')
-
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -75,7 +83,6 @@ export default function WardrobePage() {
     }
 
     let didLoad = false
-
     const tryLoad = async (sessionUser: any) => {
       if (didLoad || !sessionUser) return
       didLoad = true
@@ -147,7 +154,30 @@ export default function WardrobePage() {
       console.error('[wardrobe] loadWardrobe error:', error.message)
       return
     }
-    if (data) setItems(data as any)
+
+    if (!data) return
+
+    const productIds = data.map((i: any) => i.product_id).filter(Boolean)
+
+    let nftMap: Record<string, NftCertificate> = {}
+    if (productIds.length > 0) {
+      const { data: nfts } = await supabase
+        .from('nft_certificates')
+        .select('product_id, token_id, tx_hash, contract_address, network, owner_address, minted_at')
+        .in('product_id', productIds)
+      if (nfts) {
+        for (const n of nfts) {
+          nftMap[n.product_id] = n as NftCertificate
+        }
+      }
+    }
+
+    const merged = data.map((i: any) => ({
+      ...i,
+      nft: nftMap[i.product_id] ?? null,
+    }))
+
+    setItems(merged as WardrobeItem[])
   }
 
   const toggleFavorite = async (itemId: string, current: boolean) => {
@@ -224,7 +254,7 @@ export default function WardrobePage() {
             Se connecter
           </Link>
           <Link href="/" className="px-6 py-2.5 bg-gray-900 text-gray-300 text-sm font-semibold rounded-full hover:bg-gray-800 transition">
-            Retour \u00E0 l&apos;accueil
+            Retour \u00E0 l'accueil
           </Link>
         </div>
       </div>
@@ -330,6 +360,11 @@ export default function WardrobePage() {
                 .slice()
                 .sort((a, b) => a.position - b.position)
               const cover = sortedImages[0]?.url
+              const nft = item.nft
+              const polygonscanBase = nft?.network === 'polygon'
+                ? 'https://polygonscan.com'
+                : 'https://polygonscan.com'
+
               return (
                 <div key={item.id} className="bg-gray-950 border border-white/5 rounded-2xl overflow-hidden flex flex-col">
                   {/* Image ou Emoji cat\u00E9gorie */}
@@ -347,6 +382,13 @@ export default function WardrobePage() {
                     ) : (
                       <span className="text-4xl">{emoji}</span>
                     )}
+                    {/* Badge NFT */}
+                    {nft && (
+                      <div className="absolute top-2 right-2 bg-cyan-500/90 text-black text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span>&#9830;</span>
+                        <span>NFT</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Infos */}
@@ -354,6 +396,37 @@ export default function WardrobePage() {
                     <p className="text-xs text-gray-500 uppercase tracking-wider">{p?.brand}</p>
                     <p className="text-sm font-medium leading-tight">{p?.model_name}</p>
                     <p className="text-xs text-gray-600 capitalize">{p?.category}</p>
+
+                    {/* Certification NFT */}
+                    {nft ? (
+                      <div className="mt-2 p-2 bg-cyan-950/40 border border-cyan-500/20 rounded-xl">
+                        <p className="text-[10px] text-cyan-400 font-semibold uppercase tracking-wider mb-1">Certifi\u00E9 blockchain</p>
+                        <p className="text-[10px] text-gray-400">Token #{nft.token_id} \u00B7 Polygon</p>
+                        <div className="flex gap-2 mt-1.5 flex-wrap">
+                          <a
+                            href={`${polygonscanBase}/tx/${nft.tx_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                          >
+                            Voir la transaction
+                          </a>
+                          <a
+                            href={`${polygonscanBase}/token/${nft.contract_address}?a=${nft.token_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                          >
+                            Voir le NFT
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-1">
+                        <span style={{ fontSize: 11, opacity: 0.3 }}>&#9830;</span>
+                        <p className="text-[10px] text-white/20">Certification en attente</p>
+                      </div>
+                    )}
 
                     {/* ID */}
                     <p className="text-xs text-gray-700 font-mono mt-auto pt-2">{p?.katrya_id}</p>
@@ -369,13 +442,22 @@ export default function WardrobePage() {
                       >
                         {item.is_favorite ? '\u2665' : '\u2661'}
                       </button>
-                      <button
-                        onClick={() => removeFromWardrobe(item.id)}
-                        className="text-xs text-gray-700 hover:text-red-400 transition"
-                        title="Retirer du dressing"
-                      >
-                        \u2715
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <Link
+                          href={`/p/${p?.katrya_id}`}
+                          className="text-xs text-gray-600 hover:text-gray-300 transition"
+                          title="Voir le passeport"
+                        >
+                          Passeport &#8599;
+                        </Link>
+                        <button
+                          onClick={() => removeFromWardrobe(item.id)}
+                          className="text-xs text-gray-700 hover:text-red-400 transition"
+                          title="Retirer du dressing"
+                        >
+                          \u2715
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
