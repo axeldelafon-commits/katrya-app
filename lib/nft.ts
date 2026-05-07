@@ -68,6 +68,29 @@ export function buildNFTMetadata(params: BuildNFTMetadataParams): NFTMetadata {
   }
 }
 
+/**
+ * Encode les métadonnées NFT en Data URI base64
+ * Utilisé comme tokenURI quand on ne veut pas dépendre d'une URL externe
+ * Pour KATRYA on préfère utiliser l'URL /api/nft/metadata/[tokenId]
+ */
+export function metadataToDataURI(metadata: NFTMetadata): string {
+  const json = JSON.stringify(metadata)
+  const base64 = Buffer.from(json).toString('base64')
+  return `data:application/json;base64,${base64}`
+}
+
+/**
+ * Vérifie que les variables d'environnement blockchain sont présentes
+ * Retourne true si tout est configuré, false sinon
+ */
+export function checkNFTConfig(): boolean {
+  return Boolean(
+    process.env.ALCHEMY_POLYGON_RPC_URL &&
+    process.env.KATRYA_WALLET_PRIVATE_KEY &&
+    process.env.NFT_CONTRACT_ADDRESS
+  )
+}
+
 // ---- Mint ------------------------------------------------------------------
 
 const CONTRACT_ABI = [
