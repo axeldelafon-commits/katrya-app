@@ -15,13 +15,15 @@ const Wardrobe3D = dynamic(() => import('./Wardrobe3D'), {
   ),
 })
 
+// Correspond aux colonnes réelles de la table nft_certificates
 interface NftCertificate {
   token_id: string
-  tx_hash: string
+  transaction_hash: string
   contract_address: string
-  network: string
+  chain: string
   owner_address: string | null
   minted_at: string
+  status: string
 }
 
 interface WardrobeItem {
@@ -41,7 +43,6 @@ interface WardrobeItem {
   nft?: NftCertificate | null
 }
 
-// Menu de navigation Katrya simple
 function KatryaMenu() {
   return (
     <nav className="sticky top-0 z-20 bg-black border-b border-white/5">
@@ -163,7 +164,7 @@ export default function WardrobePage() {
     if (productIds.length > 0) {
       const { data: nfts } = await supabase
         .from('nft_certificates')
-        .select('product_id, token_id, tx_hash, contract_address, network, owner_address, minted_at')
+        .select('product_id, token_id, transaction_hash, contract_address, chain, owner_address, minted_at, status')
         .in('product_id', productIds)
       if (nfts) {
         for (const n of nfts) {
@@ -261,7 +262,6 @@ export default function WardrobePage() {
     )
   }
 
-  // 3D fullscreen layout
   if (view === '3d') {
     return (
       <div className="min-h-screen bg-black flex flex-col">
@@ -295,10 +295,8 @@ export default function WardrobePage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Menu Katrya */}
       <KatryaMenu />
 
-      {/* Header dressing */}
       <div className="max-w-4xl mx-auto px-4 pt-8 pb-4">
         <div className="flex items-end justify-between">
           <div>
@@ -310,7 +308,6 @@ export default function WardrobePage() {
           </button>
         </div>
 
-        {/* Filtres + toggle vue */}
         {items.length > 0 && (
           <div className="flex gap-2 mt-4 flex-wrap">
             <button
@@ -340,7 +337,6 @@ export default function WardrobePage() {
         )}
       </div>
 
-      {/* Grille des articles */}
       <div className="max-w-4xl mx-auto px-4 pb-12">
         {displayedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -361,13 +357,10 @@ export default function WardrobePage() {
                 .sort((a, b) => a.position - b.position)
               const cover = sortedImages[0]?.url
               const nft = item.nft
-              const polygonscanBase = nft?.network === 'polygon'
-                ? 'https://polygonscan.com'
-                : 'https://polygonscan.com'
+              const polygonscanBase = 'https://polygonscan.com'
 
               return (
                 <div key={item.id} className="bg-gray-950 border border-white/5 rounded-2xl overflow-hidden flex flex-col">
-                  {/* Image ou Emoji cat\u00E9gorie */}
                   <div className="aspect-square bg-gray-900 flex items-center justify-center relative">
                     {cover ? (
                       <div className="w-full h-full">
@@ -382,8 +375,7 @@ export default function WardrobePage() {
                     ) : (
                       <span className="text-4xl">{emoji}</span>
                     )}
-                    {/* Badge NFT */}
-                    {nft && (
+                    {nft && nft.status !== 'pending' && (
                       <div className="absolute top-2 right-2 bg-cyan-500/90 text-black text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                         <span>&#9830;</span>
                         <span>NFT</span>
@@ -391,20 +383,18 @@ export default function WardrobePage() {
                     )}
                   </div>
 
-                  {/* Infos */}
                   <div className="p-3 flex flex-col gap-1 flex-1">
                     <p className="text-xs text-gray-500 uppercase tracking-wider">{p?.brand}</p>
                     <p className="text-sm font-medium leading-tight">{p?.model_name}</p>
                     <p className="text-xs text-gray-600 capitalize">{p?.category}</p>
 
-                    {/* Certification NFT */}
-                    {nft ? (
+                    {nft && nft.status === 'minted' ? (
                       <div className="mt-2 p-2 bg-cyan-950/40 border border-cyan-500/20 rounded-xl">
                         <p className="text-[10px] text-cyan-400 font-semibold uppercase tracking-wider mb-1">Certifi\u00E9 blockchain</p>
                         <p className="text-[10px] text-gray-400">Token #{nft.token_id} \u00B7 Polygon</p>
                         <div className="flex gap-2 mt-1.5 flex-wrap">
                           <a
-                            href={`${polygonscanBase}/tx/${nft.tx_hash}`}
+                            href={`${polygonscanBase}/tx/${nft.transaction_hash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[10px] text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
@@ -421,6 +411,21 @@ export default function WardrobePage() {
                           </a>
                         </div>
                       </div>
+                    ) : nft && nft.status === 'transferred' ? (
+                      <div className="mt-2 p-2 bg-violet-950/40 border border-violet-500/20 rounded-xl">
+                        <p className="text-[10px] text-violet-400 font-semibold uppercase tracking-wider mb-1">Propri\u00E9taire v\u00E9rifi\u00E9</p>
+                        <p className="text-[10px] text-gray-400">Token #{nft.token_id} \u00B7 Polygon</p>
+                        <div className="flex gap-2 mt-1.5 flex-wrap">
+                          <a
+                            href={`${polygonscanBase}/tx/${nft.transaction_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-violet-400 hover:text-violet-300 underline underline-offset-2"
+                          >
+                            Voir la transaction
+                          </a>
+                        </div>
+                      </div>
                     ) : (
                       <div className="mt-2 flex items-center gap-1">
                         <span style={{ fontSize: 11, opacity: 0.3 }}>&#9830;</span>
@@ -428,10 +433,8 @@ export default function WardrobePage() {
                       </div>
                     )}
 
-                    {/* ID */}
                     <p className="text-xs text-gray-700 font-mono mt-auto pt-2">{p?.katrya_id}</p>
 
-                    {/* Actions */}
                     <div className="flex items-center justify-between mt-2">
                       <button
                         onClick={() => toggleFavorite(item.id, item.is_favorite)}
@@ -467,7 +470,6 @@ export default function WardrobePage() {
         )}
       </div>
 
-      {/* Footer user */}
       <div className="border-t border-white/5 py-4">
         <p className="text-center text-xs text-gray-700">{user.email}</p>
       </div>
