@@ -29,8 +29,12 @@ export interface MintResult {
   error?: string
 }
 
-// Paramètres acceptés par buildNFTMetadata — snake_case pour compatibilité
-// avec app/api/nft/mint/route.ts qui lit le body JSON directement
+export interface NFTConfigResult {
+  ok: boolean
+  missing: string[]
+}
+
+// Paramètres de buildNFTMetadata — snake_case aligné sur le body JSON de la route mint
 export interface BuildNFTMetadataParams {
   katrya_id: string
   brand: string
@@ -38,7 +42,9 @@ export interface BuildNFTMetadataParams {
   category: string
   status: string
   description?: string
+  // Accepte les deux casses pour plus de flexibilité
   image_url?: string
+  imageUrl?: string
 }
 
 // ---- Helpers ---------------------------------------------------------------
@@ -52,12 +58,15 @@ export function buildNFTMetadata(params: BuildNFTMetadataParams): NFTMetadata {
     status,
     description,
     image_url,
+    imageUrl,
   } = params
+
+  const image = image_url ?? imageUrl ?? ''
 
   return {
     name: `${brand} ${model_name} — ${katrya_id}`,
     description: description ?? `Certificat numérique KATRYA pour ${brand} ${model_name}.`,
-    image: image_url ?? '',
+    image,
     attributes: [
       { trait_type: 'Brand', value: brand },
       { trait_type: 'Model', value: model_name },
@@ -70,8 +79,7 @@ export function buildNFTMetadata(params: BuildNFTMetadataParams): NFTMetadata {
 
 /**
  * Encode les métadonnées NFT en Data URI base64
- * Utilisé comme tokenURI quand on ne veut pas dépendre d'une URL externe
- * Pour KATRYA on préfère utiliser l'URL /api/nft/metadata/[tokenId]
+ * Utilisé comme tokenURI on-chain
  */
 export function metadataToDataURI(metadata: NFTMetadata): string {
   const json = JSON.stringify(metadata)
@@ -81,14 +89,18 @@ export function metadataToDataURI(metadata: NFTMetadata): string {
 
 /**
  * Vérifie que les variables d'environnement blockchain sont présentes
- * Retourne true si tout est configuré, false sinon
+ * Retourne { ok, missing } pour des messages d'erreur précis
  */
-export function checkNFTConfig(): boolean {
-  return Boolean(
-    process.env.ALCHEMY_POLYGON_RPC_URL &&
-    process.env.KATRYA_WALLET_PRIVATE_KEY &&
-    process.env.NFT_CONTRACT_ADDRESS
-  )
+export function checkNFTConfig(): NFTConfigResult {
+  const required: Record<string, string | undefined> = {
+    ALCHEMY_POLYGON_RPC_URL: process.env.ALCHEMY_POLYGON_RPC_URL,
+    KATRYA_WALLET_PRIVATE_KEY: process.env.KATRYA_WALLET_PRIVATE_KEY,
+    NFT_CONTRACT_ADDRESS: process.env.NFT_CONTRACT_ADDRESS,
+  }
+  const missing = Object.entries(required)
+    .filter(([, v]) => !v)
+    .map(([k]) => k)
+  return { ok: missing.length === 0, missing }
 }
 
 // ---- Mint ------------------------------------------------------------------
@@ -98,9 +110,14 @@ const CONTRACT_ABI = [
   'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
 ]
 
+/**
+ * Minte un NFT sur Polygon.
+ * @param recipientAddress — adresse wallet qui recevra le NFT
+ * @param metadataOrURI — soit un objet NFTMetadata (encodé en data URI), soit une string tokenURI directe
+ */
 export async function mintKatryaNFT(
   recipientAddress: string,
-  tokenURI: string
+  metadataOrURI: NFTMetadata | string
 ): Promise<MintResult> {
   try {
     const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL
@@ -113,6 +130,11 @@ export async function mintKatryaNFT(
         error: 'Missing blockchain env vars: ALCHEMY_POLYGON_RPC_URL, KATRYA_WALLET_PRIVATE_KEY, NFT_CONTRACT_ADDRESS',
       }
     }
+
+    // Convertit l'objet metadata en data URI si nécessaire
+    const tokenURI = typeof metadataOrURI === 'string'
+      ? metadataOrURI
+      : metadataToDataURI(metadataOrURI)
 
     const provider = new ethers.JsonRpcProvider(rpcUrl)
     const wallet = new ethers.Wallet(privateKey, provider)
