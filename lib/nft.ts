@@ -42,9 +42,15 @@ export interface BuildNFTMetadataParams {
   category: string
   status: string
   description?: string
-  // Accepte les deux casses pour plus de flexibilité
   image_url?: string
   imageUrl?: string
+}
+
+// Paramètres de transferKatryaNFT — objet pour simplifier les appels
+export interface TransferParams {
+  tokenId: number | string
+  toAddress: string
+  fromAddress?: string
 }
 
 // ---- Helpers ---------------------------------------------------------------
@@ -113,7 +119,7 @@ const CONTRACT_ABI = [
 /**
  * Minte un NFT sur Polygon.
  * @param recipientAddress — adresse wallet qui recevra le NFT
- * @param metadataOrURI — soit un objet NFTMetadata (encodé en data URI), soit une string tokenURI directe
+ * @param metadataOrURI — objet NFTMetadata (encodé en data URI) ou string tokenURI directe
  */
 export async function mintKatryaNFT(
   recipientAddress: string,
@@ -131,7 +137,6 @@ export async function mintKatryaNFT(
       }
     }
 
-    // Convertit l'objet metadata en data URI si nécessaire
     const tokenURI = typeof metadataOrURI === 'string'
       ? metadataOrURI
       : metadataToDataURI(metadataOrURI)
@@ -143,7 +148,6 @@ export async function mintKatryaNFT(
     const tx = await contract.mintNFT(recipientAddress, tokenURI)
     const receipt = await tx.wait()
 
-    // Récupérer le tokenId depuis les logs Transfer
     let tokenId: string | undefined
     for (const log of receipt.logs) {
       try {
@@ -153,15 +157,11 @@ export async function mintKatryaNFT(
           break
         }
       } catch {
-        // log non parseable, on continue
+        // log non parseable
       }
     }
 
-    return {
-      success: true,
-      tokenId,
-      transactionHash: receipt.hash,
-    }
+    return { success: true, tokenId, transactionHash: receipt.hash }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return { success: false, error: message }
@@ -174,34 +174,34 @@ const TRANSFER_ABI = [
   'function safeTransferFrom(address from, address to, uint256 tokenId) public',
 ]
 
-export async function transferKatryaNFT(
-  fromAddress: string,
-  toAddress: string,
-  tokenId: string
-): Promise<MintResult> {
+/**
+ * Transfère un NFT vers une nouvelle adresse.
+ * Accepte un objet { tokenId, toAddress, fromAddress? }
+ * Si fromAddress est absent, utilise le wallet KATRYA_WALLET_PRIVATE_KEY comme from.
+ */
+export async function transferKatryaNFT(params: TransferParams): Promise<MintResult> {
   try {
+    const { tokenId, toAddress, fromAddress } = params
+
     const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL
     const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY
     const contractAddress = process.env.NFT_CONTRACT_ADDRESS
 
     if (!rpcUrl || !privateKey || !contractAddress) {
-      return {
-        success: false,
-        error: 'Missing blockchain env vars',
-      }
+      return { success: false, error: 'Missing blockchain env vars' }
     }
 
     const provider = new ethers.JsonRpcProvider(rpcUrl)
     const wallet = new ethers.Wallet(privateKey, provider)
     const contract = new ethers.Contract(contractAddress, TRANSFER_ABI, wallet)
 
-    const tx = await contract.safeTransferFrom(fromAddress, toAddress, BigInt(tokenId))
+    const from = fromAddress ?? wallet.address
+    const tokenIdBig = BigInt(tokenId.toString())
+
+    const tx = await contract.safeTransferFrom(from, toAddress, tokenIdBig)
     const receipt = await tx.wait()
 
-    return {
-      success: true,
-      transactionHash: receipt.hash,
-    }
+    return { success: true, transactionHash: receipt.hash }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return { success: false, error: message }
