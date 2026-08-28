@@ -5,9 +5,10 @@
  * Diagnostic blockchain KATRYA — aucune transaction, aucun gas depense.
  * ACCES : admin connecte uniquement.
  *
- * Retourne : config presente ou non, adresse du wallet admin (derivee de la
- * cle privee), solde POL, adresse du contrat, reseau. Permet de verifier que
- * le wallet est finance avant de lancer un mint.
+ * Retourne : variables d'env manquantes, adresse du wallet admin (derivee de
+ * la cle privee), solde POL, adresse du contrat, reseau. Le wallet et son
+ * solde sont calcules meme si d'autres variables manquent, pour pouvoir
+ * retrouver l'adresse et la financer.
  */
 import { NextResponse } from 'next/server'
 import { ethers } from 'ethers'
@@ -23,16 +24,20 @@ export async function GET() {
   }
 
   const config = checkNFTConfig()
-  if (!config.ok) {
+  const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL
+  const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY
+
+  if (!rpcUrl || !privateKey) {
     return NextResponse.json({
       configOk: false,
       missing: config.missing,
+      hint: 'Impossible de determiner le wallet sans ALCHEMY_POLYGON_RPC_URL et KATRYA_WALLET_PRIVATE_KEY.',
     })
   }
 
   try {
-    const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_POLYGON_RPC_URL)
-    const wallet = new ethers.Wallet(process.env.KATRYA_WALLET_PRIVATE_KEY!, provider)
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    const wallet = new ethers.Wallet(privateKey, provider)
 
     const [balance, network] = await Promise.all([
       provider.getBalance(wallet.address),
@@ -40,9 +45,11 @@ export async function GET() {
     ])
 
     const pol = Number(ethers.formatEther(balance))
+    const contract = process.env.NFT_CONTRACT_ADDRESS ?? null
 
     return NextResponse.json({
-      configOk: true,
+      configOk: config.ok,
+      missing: config.missing,
       adminWalletAddress: wallet.address,
       adminWalletUrl: `https://polygonscan.com/address/${wallet.address}`,
       balancePOL: pol.toFixed(6),
@@ -51,14 +58,14 @@ export async function GET() {
       envWalletMatchesKey:
         (process.env.KATRYA_ADMIN_WALLET_ADDRESS ?? '').toLowerCase() ===
         wallet.address.toLowerCase(),
-      contractAddress: process.env.NFT_CONTRACT_ADDRESS,
-      contractUrl: `https://polygonscan.com/address/${process.env.NFT_CONTRACT_ADDRESS}`,
+      contractAddress: contract,
+      contractUrl: contract ? `https://polygonscan.com/address/${contract}` : null,
       chainId: network.chainId.toString(),
       chainName: network.name,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[NFT Status] error:', message)
-    return NextResponse.json({ configOk: true, error: message }, { status: 500 })
+    return NextResponse.json({ configOk: false, missing: config.missing, error: message }, { status: 500 })
   }
 }
