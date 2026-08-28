@@ -5,6 +5,8 @@
  * Minte un NFT ERC-721 sur Polygon pour un produit KATRYA.
  * Utilise ethers.js + Alchemy (stack 100% gratuit).
  *
+ * ACCES : admin connecte uniquement (chaque appel depense du gas reel).
+ *
  * Body JSON attendu :
  * {
  *   productId: string      // UUID Supabase du produit
@@ -15,15 +17,17 @@
  *   status: string
  *   description?: string
  *   imageUrl?: string      // URL image principale
- *   recipientAddress?: string  // wallet admin par défaut si absent
+ *   recipientAddress?: string  // wallet admin par defaut si absent
  * }
  *
- * Réponse JSON :
- * { success, tokenId, transactionHash, contractAddress, chain, error? }
+ * Reponse JSON :
+ * { success, dbSaved, tokenId, transactionHash, contractAddress, chain, error? }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { ethers } from 'ethers'
 import { mintKatryaNFT, buildNFTMetadata, metadataToDataURI, checkNFTConfig } from '@/lib/nft'
+import { requireAdminApi } from '@/lib/api-auth'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -33,7 +37,16 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    // --- Vérification config ---
+    // --- Auth : admin connecte uniquement ---
+    const auth = await requireAdminApi()
+    if (!auth.ok) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: auth.status }
+      )
+    }
+
+    // --- Verification config ---
     const config = checkNFTConfig()
     if (!config.ok) {
       return NextResponse.json(
@@ -63,23 +76,47 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // --- Vérification doublons ---
+    // --- Destinataire : valide avant toute depense de gas ---
+    const recipient = recipientAddress || process.env.KATRYA_ADMIN_WALLET_ADDRESS
+    if (!recipient || !ethers.isAddress(recipient)) {
+      return NextResponse.json(
+        { success: false, error: 'Adresse destinataire absente ou invalide' },
+        { status: 400 }
+      )
+    }
+
+    // --- Le produit doit exister (evite un mint sur un UUID arbitraire) ---
+    const { data: product } = await supabase
+      .from('products')
+      .select('id, katrya_id')
+      .eq('id', productId)
+      .maybeSingle()
+
+    if (!product || product.katrya_id !== katryaId) {
+      return NextResponse.json(
+        { success: false, error: 'Produit introuvable ou katryaId incoherent' },
+        { status: 404 }
+      )
+    }
+
+    // --- Verification doublons ---
     const { data: existing } = await supabase
       .from('nft_certificates')
       .select('token_id, transaction_hash')
       .eq('product_id', productId)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       return NextResponse.json({
         success: true,
+        dbSaved: true,
         tokenId: existing.token_id,
         transactionHash: existing.transaction_hash,
-        message: 'NFT déjà minté pour ce produit',
+        message: 'NFT deja minte pour ce produit',
       })
     }
 
-    // --- Construction métadonnées ---
+    // --- Construction metadonnees ---
     const metadata = buildNFTMetadata({
       katrya_id: katryaId,
       brand,
@@ -93,8 +130,6 @@ export async function POST(request: NextRequest) {
     const tokenURI = metadataToDataURI(metadata)
 
     // --- Mint NFT ---
-    const recipient = recipientAddress || process.env.KATRYA_ADMIN_WALLET_ADDRESS!
-
     const result = await mintKatryaNFT(recipient, metadata)
 
     if (!result.success) {
@@ -121,12 +156,23 @@ export async function POST(request: NextRequest) {
       })
 
     if (dbError) {
+      // NFT minte on-chain mais non sauvegarde : on remonte l'alerte a l'admin
+      // au lieu de l'avaler, avec le hash pour pouvoir rattraper manuellement.
       console.error('[NFT Mint] DB error:', dbError)
-      // NFT minté mais non sauvegardé — on retourne quand même le succès
+      return NextResponse.json({
+        success: true,
+        dbSaved: false,
+        tokenId: result.tokenId?.toString(),
+        transactionHash: result.transactionHash,
+        contractAddress: process.env.NFT_CONTRACT_ADDRESS,
+        chain: 'polygon',
+        message: `ALERTE : NFT minte on-chain mais NON enregistre en base (${dbError.message}). Notez le tx hash.`,
+      })
     }
 
     return NextResponse.json({
       success: true,
+      dbSaved: true,
       tokenId: result.tokenId?.toString(),
       transactionHash: result.transactionHash,
       contractAddress: process.env.NFT_CONTRACT_ADDRESS,
