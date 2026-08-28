@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         katrya_id: katryaId,
         token_id: result.tokenId?.toString(),
         transaction_hash: result.transactionHash,
-        contract_address: process.env.KATRYA_NFT_CONTRACT_ADDRESS,
+        contract_address: process.env.NFT_CONTRACT_ADDRESS,
         chain: 'polygon',
         token_uri: tokenURI,
         owner_address: recipient,
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       success: true,
       tokenId: result.tokenId?.toString(),
       transactionHash: result.transactionHash,
-      contractAddress: process.env.KATRYA_NFT_CONTRACT_ADDRESS,
+      contractAddress: process.env.NFT_CONTRACT_ADDRESS,
       chain: 'polygon',
     })
 
