@@ -11,12 +11,16 @@
  *   toAddress: string      // adresse wallet du client
  * }
  *
+ * ACCES : admin connecte uniquement.
+ *
  * Réponse JSON :
- * { success, transactionHash, error? }
+ * { success, dbSaved, transactionHash, error? }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { ethers } from 'ethers'
 import { transferKatryaNFT, checkNFTConfig } from '@/lib/nft'
+import { requireAdminApi } from '@/lib/api-auth'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -26,6 +30,15 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
+    // --- Auth : admin connecte uniquement ---
+    const auth = await requireAdminApi()
+    if (!auth.ok) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: auth.status }
+      )
+    }
+
     // --- Vérification config ---
     const config = checkNFTConfig()
     if (!config.ok) {
@@ -42,6 +55,14 @@ export async function POST(request: NextRequest) {
     if (!productId || !toAddress) {
       return NextResponse.json(
         { success: false, error: 'Champs obligatoires manquants: productId, toAddress' },
+        { status: 400 }
+      )
+    }
+
+    // --- Validation de l'adresse avant toute dépense de gas ---
+    if (!ethers.isAddress(toAddress)) {
+      return NextResponse.json(
+        { success: false, error: 'Adresse de destination invalide' },
         { status: 400 }
       )
     }
@@ -92,10 +113,18 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       console.error('[NFT Transfer] DB update error:', updateError)
+      return NextResponse.json({
+        success: true,
+        dbSaved: false,
+        transactionHash: result.transactionHash,
+        toAddress,
+        message: `ALERTE : transfert on-chain effectué mais base non mise à jour (${updateError.message}).`,
+      })
     }
 
     return NextResponse.json({
       success: true,
+      dbSaved: true,
       transactionHash: result.transactionHash,
       toAddress,
     })
