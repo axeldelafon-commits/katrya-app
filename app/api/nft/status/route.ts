@@ -24,8 +24,8 @@ export async function GET() {
   }
 
   const config = checkNFTConfig()
-  const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL
-  const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY
+  const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL?.trim()
+  const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY?.trim()
 
   if (!rpcUrl || !privateKey) {
     return NextResponse.json({
@@ -45,7 +45,7 @@ export async function GET() {
     ])
 
     const pol = Number(ethers.formatEther(balance))
-    const contract = process.env.NFT_CONTRACT_ADDRESS ?? null
+    const contract = process.env.NFT_CONTRACT_ADDRESS?.trim() ?? null
 
     return NextResponse.json({
       configOk: config.ok,
