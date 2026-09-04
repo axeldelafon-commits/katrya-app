@@ -1,3 +1,28 @@
+// =============================================================================
+// ATTENTION - CE FICHIER N'EST PAS LE CONTRAT REELLEMENT DEPLOYE
+//
+// Le contrat en production sur Polygon Mainnet se trouve a l'adresse
+// 0x21fE295A01907b1e2C513BA64dB82Cc816dAad8C (source verifiee sur Polygonscan)
+// et expose une surface plus reduite que ce fichier :
+//
+//   - mint(address to, string tokenURI) returns (uint256)  <- seule fonction de mint
+//   - totalSupply()
+//   - owner() / transferOwnership(address) / renounceOwnership()
+//   - l'ERC-721 standard (safeTransferFrom, tokenURI, ownerOf, ...)
+//
+// Il n'a NI mintWithId, NI updateTokenURI, NI exists(), NI les evenements
+// KatrYaMinted / KatryaTransferred definis plus bas. Son nom on-chain est
+// "KATRYA Product Passport" (symbole "KATRYA"). Son compteur est post-incremente :
+// le premier token porte l'id 0, pas 1.
+//
+// Consequence pratique : les metadonnees d'un token deja minte ne peuvent plus
+// etre modifiees on-chain. C'est pourquoi le tokenURI grave au mint pointe vers
+// /api/nft/metadata/by-katrya-id/[katryaId], servi en direct par l'app.
+//
+// Ce fichier reste la reference de conception. Pour construire un ABI, utiliser
+// celui publie sur Polygonscan, pas celui-ci.
+// =============================================================================
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
