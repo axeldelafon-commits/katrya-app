@@ -65,7 +65,7 @@ export async function GET() {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error('[NFT Status] error:', message)
-    return NextResponse.json({ configOk: false, missing: config.missing, error: message }, { status: 500 })
+    console.error('[NFT Status] error:', message.replace(/(0x)?[0-9a-fA-F]{56,}/g, '[REDACTED]'))
+    return NextResponse.json({ configOk: false, missing: config.missing, error: message.replace(/(0x)?[0-9a-fA-F]{56,}/g, '[REDACTED]') }, { status: 500 })
   }
 }
