@@ -26,7 +26,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
-import { mintKatryaNFT, buildNFTMetadata, metadataToDataURI, checkNFTConfig } from '@/lib/nft'
+import { mintKatryaNFT, buildNFTMetadata, checkNFTConfig } from '@/lib/nft'
 import { requireAdminApi } from '@/lib/api-auth'
 import { createClient } from '@supabase/supabase-js'
 
@@ -127,10 +127,12 @@ export async function POST(request: NextRequest) {
       imageUrl,
     })
 
-    const tokenURI = metadataToDataURI(metadata)
+    const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://katrya-app.vercel.app'
+    // tokenURI = URL vivante servie par l'app : les metadonnees restent modifiables
+    const tokenURI = `${baseUrl}/api/nft/metadata/by-katrya-id/${encodeURIComponent(katryaId)}`
 
     // --- Mint NFT ---
-    const result = await mintKatryaNFT(recipient, metadata)
+    const result = await mintKatryaNFT(recipient, tokenURI)
 
     if (!result.success) {
       return NextResponse.json(
