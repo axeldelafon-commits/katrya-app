@@ -126,9 +126,9 @@ export async function mintKatryaNFT(
   metadataOrURI: NFTMetadata | string
 ): Promise<MintResult> {
   try {
-    const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL
-    const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY
-    const contractAddress = process.env.NFT_CONTRACT_ADDRESS
+    const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL?.trim()
+    const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY?.trim()
+    const contractAddress = process.env.NFT_CONTRACT_ADDRESS?.trim()
 
     if (!rpcUrl || !privateKey || !contractAddress) {
       return {
@@ -183,9 +183,9 @@ export async function transferKatryaNFT(params: TransferParams): Promise<MintRes
   try {
     const { tokenId, toAddress, fromAddress } = params
 
-    const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL
-    const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY
-    const contractAddress = process.env.NFT_CONTRACT_ADDRESS
+    const rpcUrl = process.env.ALCHEMY_POLYGON_RPC_URL?.trim()
+    const privateKey = process.env.KATRYA_WALLET_PRIVATE_KEY?.trim()
+    const contractAddress = process.env.NFT_CONTRACT_ADDRESS?.trim()
 
     if (!rpcUrl || !privateKey || !contractAddress) {
       return { success: false, error: 'Missing blockchain env vars' }
