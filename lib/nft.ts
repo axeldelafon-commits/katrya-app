@@ -112,7 +112,7 @@ export function checkNFTConfig(): NFTConfigResult {
 // ---- Mint ------------------------------------------------------------------
 
 const CONTRACT_ABI = [
-  'function mintNFT(address recipient, string memory tokenURI) public returns (uint256)',
+  'function mint(address recipient, string memory tokenURI) public returns (uint256)',
   'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
 ]
 
@@ -145,7 +145,7 @@ export async function mintKatryaNFT(
     const wallet = new ethers.Wallet(privateKey, provider)
     const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, wallet)
 
-    const tx = await contract.mintNFT(recipientAddress, tokenURI)
+    const tx = await contract.mint(recipientAddress, tokenURI)
     const receipt = await tx.wait()
 
     let tokenId: string | undefined
@@ -164,7 +164,7 @@ export async function mintKatryaNFT(
     return { success: true, tokenId, transactionHash: receipt.hash }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return { success: false, error: message }
+    return { success: false, error: message.replace(/(0x)?[0-9a-fA-F]{56,}/g, '[REDACTED]') }
   }
 }
 
@@ -204,6 +204,6 @@ export async function transferKatryaNFT(params: TransferParams): Promise<MintRes
     return { success: true, transactionHash: receipt.hash }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return { success: false, error: message }
+    return { success: false, error: message.replace(/(0x)?[0-9a-fA-F]{56,}/g, '[REDACTED]') }
   }
 }
