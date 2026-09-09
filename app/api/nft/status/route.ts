@@ -47,6 +47,17 @@ export async function GET() {
     const pol = Number(ethers.formatEther(balance))
     const contract = process.env.NFT_CONTRACT_ADDRESS?.trim() ?? null
 
+    // Proprietaire on-chain du contrat : seul lui peut appeler mint()
+    let contractOwner: string | null = null
+    if (contract) {
+      try {
+        const c = new ethers.Contract(contract, ['function owner() view returns (address)'], provider)
+        contractOwner = await c.owner()
+      } catch (e) {
+        console.error('[NFT Status] owner() failed:', e)
+      }
+    }
+
     return NextResponse.json({
       configOk: config.ok,
       missing: config.missing,
@@ -60,6 +71,10 @@ export async function GET() {
         wallet.address.toLowerCase(),
       contractAddress: contract,
       contractUrl: contract ? `https://polygonscan.com/address/${contract}` : null,
+      contractOwner,
+      walletIsContractOwner: contractOwner
+        ? contractOwner.toLowerCase() === wallet.address.toLowerCase()
+        : null,
       chainId: network.chainId.toString(),
       chainName: network.name,
     })
