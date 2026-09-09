@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { requireAdminApi } from '@/lib/api-auth'
 import { checkNFTConfig } from '@/lib/nft'
+import { getPassportBaseUrl } from '@/lib/katrya'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,6 +78,7 @@ export async function GET() {
         : null,
       chainId: network.chainId.toString(),
       chainName: network.name,
+      passportBaseUrl: getPassportBaseUrl(),
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
