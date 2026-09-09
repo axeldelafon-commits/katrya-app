@@ -12,7 +12,7 @@ export default async function PassportPage({ params }: PageProps) {
   const { katryaId } = params
   const supabase = createClient()
 
-  const { data: product } = await supabase
+  const { data: product, error: productError } = await supabase
     .from('products')
     .select(`
       *,
@@ -21,7 +21,12 @@ export default async function PassportPage({ params }: PageProps) {
       product_images(id, url, position, alt_text)
     `)
     .eq('katrya_id', katryaId)
-    .single()
+    .maybeSingle()
+
+  if (productError) {
+    console.error('[passport] Supabase error:', productError.message)
+    return <PassportUnavailable katryaId={katryaId} />
+  }
 
   if (!product) notFound()
 
@@ -178,6 +183,25 @@ export default async function PassportPage({ params }: PageProps) {
 
       <div className="border-t border-white/10 px-6 py-6 text-center mt-4">
         <p className="text-xs text-white/20 tracking-widest uppercase">Powered by KATRYA NFC</p>
+      </div>
+    </main>
+  )
+}
+
+function PassportUnavailable({ katryaId }: { katryaId: string }) {
+  return (
+    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
+      <div className="text-center max-w-md">
+        <h1 className="text-4xl font-bold mb-4">KATRYA</h1>
+        <p className="text-yellow-400 text-lg mb-2">Service momentanement indisponible</p>
+        <p className="text-gray-400 text-sm mb-2">
+          Nous ne parvenons pas a joindre le registre des passeports pour le moment.
+          Ceci ne remet pas en cause l&apos;authenticite du produit {katryaId}.
+        </p>
+        <p className="text-gray-500 text-xs mb-8">Merci de reessayer dans quelques instants.</p>
+        <a href="/" className="inline-block border border-white text-white px-6 py-3 text-sm hover:bg-white hover:text-black transition-colors">
+          Retour a l&apos;accueil
+        </a>
       </div>
     </main>
   )
