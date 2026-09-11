@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import LinkTagForm from './link-tag-form'
+import VerifyTagButton from './verify-tag-button'
 import PublishPassportForm from './publish-passport-form'
 import StatusForm from './status-form'
 import ImageUploader from './image-uploader'
@@ -99,7 +100,8 @@ export default async function ProductDetailPage({
         ) : (
           <p style={{ color: '#888' }}>Aucune puce liée.</p>
         )}
-        <LinkTagForm productId={id} />
+        <LinkTagForm productId={id} productStatus={product.status} />
+        {tag && <VerifyTagButton productId={id} />}
       </div>
       <div style={card}>
         <h3 style={{ margin: '0 0 12px' }}>Passeport</h3>
