@@ -15,6 +15,43 @@ interface Props {
   initialImages: ImageItem[]
 }
 
+/**
+ * Convertit une image vers JPEG quand son format n'est pas universellement
+ * lisible. Les photos partent dans les metadonnees ERC-721 : un AVIF s'affiche
+ * bien dans un navigateur, mais les portefeuilles crypto et les places de
+ * marche NFT rendent souvent un carre vide. La conversion se fait ici, dans le
+ * navigateur de l'admin, pour ne pas ajouter de dependance serveur.
+ *
+ * En cas d'echec on renvoie le fichier d'origine : mieux vaut une image au
+ * mauvais format qu'un upload perdu.
+ */
+const PORTABLE_TYPES = ['image/jpeg', 'image/png']
+
+async function toPortableImage(file: File): Promise<File> {
+  if (PORTABLE_TYPES.includes(file.type)) return file
+  try {
+    const bitmap = await createImageBitmap(file)
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+    // Fond blanc : un PNG/AVIF transparent deviendrait noir en JPEG.
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(bitmap, 0, 0)
+    bitmap.close?.()
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.9)
+    )
+    if (!blob) return file
+    const name = file.name.replace(/\.[^.]+$/, '') + '.jpg'
+    return new File([blob], name, { type: 'image/jpeg' })
+  } catch {
+    return file
+  }
+}
+
 export default function ImageUploader({ productId, initialImages }: Props) {
   const [images, setImages] = useState<ImageItem[]>(
     [...initialImages].sort((a, b) => a.position - b.position)
@@ -108,8 +145,8 @@ export default function ImageUploader({ productId, initialImages }: Props) {
     }
   }
 
-  const handleFileUpload = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
+  const handleFileUpload = async (inputFile: File) => {
+    if (!inputFile.type.startsWith('image/')) {
       setUploadError('Fichier non valide. Utilisez une image (jpg, png, webp).')
       return
     }
@@ -117,6 +154,7 @@ export default function ImageUploader({ productId, initialImages }: Props) {
     setUploadError('')
     setSuccessMsg('')
     try {
+      const file = await toPortableImage(inputFile)
       const fd = new FormData()
       fd.append('file', file)
       if (altInput) fd.append('alt_text', altInput)
