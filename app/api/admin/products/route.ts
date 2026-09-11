@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { generateKatryaId } from '@/lib/katrya'
+import { PRODUCT_CATEGORY_VALUES } from '@/lib/categories'
 
 const schema = z.object({
   organization_id: z.string().uuid(),
@@ -10,7 +11,10 @@ const schema = z.object({
   model_name: z.string().min(1),
   sku: z.string().optional().nullable(),
   serial_number: z.string().optional().nullable(),
-  category: z.string().min(1),
+  // Vocabulaire ferme : une categorie hors liste sort de tous les regroupements du dressing.
+  category: z.string().refine(v => PRODUCT_CATEGORY_VALUES.includes(v), {
+    message: `Categorie invalide. Valeurs acceptees : ${PRODUCT_CATEGORY_VALUES.join(', ')}`,
+  }),
 })
 
 export async function POST(req: Request) {
