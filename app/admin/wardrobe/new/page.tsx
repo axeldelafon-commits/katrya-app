@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { PRODUCT_CATEGORIES } from '@/lib/categories'
 
 export default function NewWardrobeItemPage() {
   const router = useRouter()
@@ -106,13 +107,9 @@ export default function NewWardrobeItemPage() {
           <label style={labelStyle}>CATÉGORIE</label>
           <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
             <option value="">-- Sélectionnez --</option>
-            <option value="Haut">Haut</option>
-            <option value="Bas">Bas</option>
-            <option value="Chaussures">Chaussures</option>
-            <option value="Accessoire">Accessoire</option>
-            <option value="Veste">Veste</option>
-            <option value="Robe">Robe</option>
-            <option value="Autre">Autre</option>
+            {PRODUCT_CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
           </select>
         </div>
         <div>
