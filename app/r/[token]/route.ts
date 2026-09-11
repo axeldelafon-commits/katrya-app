@@ -2,18 +2,29 @@
  * app/r/[token]/route.ts
  * GET /r/:token — point d'entree des scans NFC.
  *
- * Distinction critique entre deux situations que l'utilisateur final ne doit
- * jamais confondre :
+ * Quatre situations que l'utilisateur final ne doit jamais confondre :
  *   - puce inconnue          -> /tag/not-found  (le produit n'est pas un KATRYA)
+ *   - puce revoquee          -> /tag/revoked    (elle a existe, elle ne vaut plus rien)
+ *   - puce suspendue         -> /tag/inactive   (mise en pause, reversible)
  *   - panne d'infrastructure -> /tag/error      (service indisponible)
  *
  * Renvoyer "inconnu" pendant une panne reviendrait a signaler un produit
- * authentique comme une contrefacon.
+ * authentique comme une contrefacon. Et resoudre normalement une puce revoquee
+ * reviendrait a authentifier ce qu'on a justement invalide : le statut est
+ * lu ici, sinon la revocation n'existe que dans l'interface.
+ *
+ * 'pending' resout normalement : une puce fraichement gravee doit pouvoir
+ * etre testee avant d'etre activee.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
+
+const BLOCKED: Record<string, string> = {
+  revoked: '/tag/revoked',
+  inactive: '/tag/inactive',
+}
 
 export async function GET(
   request: NextRequest,
@@ -26,7 +37,7 @@ export async function GET(
 
     const { data: tag, error } = await supabase
       .from('nfc_tags')
-      .select('product_id, products(katrya_id)')
+      .select('product_id, status, products(katrya_id)')
       .eq('resolver_token', token)
       .maybeSingle()
 
@@ -46,17 +57,29 @@ export async function GET(
       return NextResponse.redirect(new URL('/tag/error', request.url))
     }
 
-    // Journalisation best-effort : un echec de log ne doit jamais casser un scan
+    const blockedPath = BLOCKED[tag.status]
+
+    // Journalisation best-effort : un echec de log ne doit jamais casser un scan.
+    // Un scan sur puce revoquee est une information precieuse (contrefacon en
+    // circulation) : on l'enregistre sous un type distinct.
     try {
       await supabase.from('events').insert({
         product_id: tag.product_id,
-        event_type: 'nfc_scan',
+        event_type: blockedPath ? 'nfc_scan_blocked' : 'nfc_scan',
         actor_type: 'anonymous',
         actor_id: null,
-        payload: { token, user_agent: request.headers.get('user-agent') },
+        payload: {
+          token,
+          tag_status: tag.status,
+          user_agent: request.headers.get('user-agent'),
+        },
       })
     } catch (logErr) {
       console.error('[resolver] event insert failed:', logErr)
+    }
+
+    if (blockedPath) {
+      return NextResponse.redirect(new URL(blockedPath, request.url))
     }
 
     return NextResponse.redirect(new URL(`/p/${product.katrya_id}`, request.url))
