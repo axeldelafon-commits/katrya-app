@@ -172,6 +172,23 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // La fiche produit porte aussi la reference du jeton (products.nft_token_id,
+    // nft_contract_address, nft_chain). Sans cette recopie, ces colonnes restaient
+    // nulles et la base racontait deux versions differentes du meme fait.
+    // Echec non bloquant : le certificat, lui, est bien enregistre.
+    const { error: productRefError } = await supabase
+      .from('products')
+      .update({
+        nft_token_id: result.tokenId?.toString(),
+        nft_contract_address: process.env.NFT_CONTRACT_ADDRESS,
+        nft_chain: 'polygon',
+      })
+      .eq('id', productId)
+
+    if (productRefError) {
+      console.error('[NFT Mint] products ref update failed:', productRefError.message)
+    }
+
     return NextResponse.json({
       success: true,
       dbSaved: true,
