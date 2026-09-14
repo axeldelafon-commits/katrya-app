@@ -13,7 +13,7 @@
  * - L'historique des propriétaires (si disponible)
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -37,7 +37,8 @@ function Badge({ certified }: { certified: boolean }) {
 
 export default async function CertificatePage({ params }: Props) {
   const { katryaId } = params
-  const supabase = createClient()
+  // Cle de service : voir le commentaire dans app/p/[katryaId]/page.tsx.
+  const supabase = createServiceClient()
 
   // Récupérer le produit
   const { data: product } = await supabase
