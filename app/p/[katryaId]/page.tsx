@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import AddToWardrobeButton from './AddToWardrobeButton'
@@ -10,13 +10,19 @@ interface PageProps {
 
 export default async function PassportPage({ params }: PageProps) {
   const { katryaId } = params
-  const supabase = createClient()
+  // Lecture cote serveur avec la cle de service : les donnees publiques du
+  // passeport sont choisies ici, colonne par colonne, plutot que d'etre
+  // exposees par une politique de lecture anonyme sur la table entiere.
+  // Avec une telle politique, la cle publique permettait de vider le
+  // catalogue (tous les produits actifs, toutes les colonnes) via l'API REST.
+  const supabase = createServiceClient()
 
   const { data: product, error: productError } = await supabase
     .from('products')
     .select(`
-      *,
-      passports(*),
+      id, katrya_id, brand, model_name, category, status, serial_number,
+      nft_token_id, nft_contract_address, nft_chain,
+      passports(version, public_data, published_at),
       organizations(name, slug),
       product_images(id, url, position, alt_text)
     `)
@@ -29,6 +35,19 @@ export default async function PassportPage({ params }: PageProps) {
   }
 
   if (!product) notFound()
+
+  // La lecture passe desormais par la cle de service, qui ignore les politiques
+  // RLS : le filtre sur le statut, jusqu'ici assure par la politique publique,
+  // doit etre explicite ici. Il est aussi plus fin qu'avant -- un produit non
+  // publie affichait "puce non reconnue", c'est-a-dire le message des
+  // contrefacons, alors qu'il est parfaitement legitime.
+  const VISIBLE = ['active', 'transferred']
+  const WITHDRAWN = ['flagged', 'revoked']
+  if (!VISIBLE.includes(product.status)) {
+    return WITHDRAWN.includes(product.status)
+      ? <PassportWithdrawn katryaId={katryaId} />
+      : <PassportNotPublished katryaId={katryaId} />
+  }
 
   const passports = product.passports as any[]
   const passport = passports && passports.length > 0
@@ -183,6 +202,48 @@ export default async function PassportPage({ params }: PageProps) {
 
       <div className="border-t border-white/10 px-6 py-6 text-center mt-4">
         <p className="text-xs text-white/20 tracking-widest uppercase">Powered by KATRYA NFC</p>
+      </div>
+    </main>
+  )
+}
+
+function PassportNotPublished({ katryaId }: { katryaId: string }) {
+  return (
+    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
+      <div className="text-center max-w-md">
+        <h1 className="text-4xl font-bold mb-4">KATRYA</h1>
+        <p className="text-yellow-400 text-lg mb-2">Passeport pas encore publie</p>
+        <p className="text-gray-400 text-sm mb-2">
+          Cette puce est bien enregistree chez KATRYA, mais le passeport du
+          produit {katryaId} n&apos;a pas encore ete publie par la marque.
+        </p>
+        <p className="text-gray-500 text-xs mb-8">
+          L&apos;authenticite du produit n&apos;est pas remise en cause.
+        </p>
+        <a href="/" className="inline-block border border-white text-white px-6 py-3 text-sm hover:bg-white hover:text-black transition-colors">
+          Retour a l&apos;accueil
+        </a>
+      </div>
+    </main>
+  )
+}
+
+function PassportWithdrawn({ katryaId }: { katryaId: string }) {
+  return (
+    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
+      <div className="text-center max-w-md">
+        <h1 className="text-4xl font-bold mb-4">KATRYA</h1>
+        <p className="text-red-400 text-lg mb-2">Passeport retire</p>
+        <p className="text-gray-400 text-sm mb-2">
+          Le passeport du produit {katryaId} a ete signale ou retire par la marque.
+          Il ne certifie plus l&apos;authenticite de cet article.
+        </p>
+        <p className="text-gray-500 text-xs mb-8">
+          Si vous venez d&apos;acheter cet article, contactez le vendeur et notre support.
+        </p>
+        <a href="/" className="inline-block border border-white text-white px-6 py-3 text-sm hover:bg-white hover:text-black transition-colors">
+          Retour a l&apos;accueil
+        </a>
       </div>
     </main>
   )
