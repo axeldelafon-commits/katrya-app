@@ -56,6 +56,15 @@ export default async function PassportPage({ params }: PageProps) {
 
   const org = product.organizations as any
   const publicData = passport?.public_data as any
+
+  // Le recit est structure : il se met en page, il ne se range pas dans le
+  // tableau cle/valeur -- sans quoi il s'y afficherait en "[object Object]".
+  const story = publicData?.story as
+    | { headline?: string; intro?: string; steps?: { title: string; detail: string }[] }
+    | undefined
+  const hasStory = Boolean(
+    story && (story.headline || story.intro || (story.steps && story.steps.length > 0))
+  )
   const images = ((product.product_images as any[]) || []).sort(
     (a: any, b: any) => a.position - b.position
   )
@@ -124,12 +133,48 @@ export default async function PassportPage({ params }: PageProps) {
           </div>
         </div>
 
+        {hasStory && (
+          <div className="border border-white/10 rounded-xl p-5 mb-4">
+            {story?.headline && (
+              <h2 className="text-lg font-semibold tracking-wide mb-2">{story.headline}</h2>
+            )}
+            {story?.intro && (
+              <p className="text-sm text-white/60 leading-relaxed whitespace-pre-line">
+                {story.intro}
+              </p>
+            )}
+            {story?.steps && story.steps.length > 0 && (
+              <ol className="mt-5 space-y-4">
+                {story.steps.map((step, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="mt-0.5 shrink-0 w-6 h-6 border border-white/25 rounded-full grid place-items-center text-[11px] tabular-nums text-white/50">
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium">{step.title}</p>
+                      {step.detail && (
+                        <p className="text-sm text-white/50 leading-relaxed">{step.detail}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
+
         {publicData && (
           <div className="border border-white/10 rounded-xl p-4 mb-4">
             <h2 className="text-sm font-semibold text-white/40 mb-3">INFORMATIONS</h2>
             <div className="space-y-2 text-sm">
               {Object.entries(publicData)
-                .filter(([key]) => key !== 'main_image_url')
+                .filter(([key, value]) =>
+                  key !== 'main_image_url' &&
+                  key !== 'story' &&
+                  value !== null &&
+                  value !== '' &&
+                  typeof value !== 'object'
+                )
                 .map(([key, value]) => (
                   <div key={key} className="flex justify-between">
                     <span className="text-white/40 capitalize">{key.replace(/_/g, ' ')}</span>
