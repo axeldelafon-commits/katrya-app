@@ -8,8 +8,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        // Alimentees par next/font dans app/layout.tsx. Utilisees uniquement
-        // par les passeports dont la marque porte une charte typographique.
+        // Definies dans app/globals.css, polices chargees dans app/layout.tsx.
+        // Utilisees uniquement par les passeports dont la marque porte une charte.
         display: ['var(--font-display)', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
         body: ['var(--font-body)', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
       },
