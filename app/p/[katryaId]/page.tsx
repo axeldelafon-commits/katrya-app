@@ -3,6 +3,9 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import AddToWardrobeButton from './AddToWardrobeButton'
 import ImageGallery from './ImageGallery'
+import { resolveTheme, accentIsReadableOnDark, type BrandTheme } from '@/lib/brand-theme'
+import { passportFieldLabel, isHiddenPassportField } from '@/lib/passport-labels'
+import { categoryLabel } from '@/lib/categories'
 
 interface PageProps {
   params: { katryaId: string }
@@ -23,7 +26,7 @@ export default async function PassportPage({ params }: PageProps) {
       id, katrya_id, brand, model_name, category, status, serial_number,
       nft_token_id, nft_contract_address, nft_chain,
       passports(version, public_data, published_at),
-      organizations(name, slug),
+      organizations(name, slug, theme),
       product_images(id, url, position, alt_text)
     `)
     .eq('katrya_id', katryaId)
@@ -57,6 +60,13 @@ export default async function PassportPage({ params }: PageProps) {
   const org = product.organizations as any
   const publicData = passport?.public_data as any
 
+  // Charte de la marque. Le passeport est la seule page que voit l'acheteur
+  // apres un scan : elle porte l'identite de la marque, pas celle de KATRYA.
+  const theme = resolveTheme(org?.theme)
+  const accentOnText = accentIsReadableOnDark(theme.accent)
+  const displayClass = theme.displayFont === 'display' ? 'font-display' : ''
+  const bodyClass = theme.bodyFont === 'body' ? 'font-body' : ''
+
   // Le recit est structure : il se met en page, il ne se range pas dans le
   // tableau cle/valeur -- sans quoi il s'y afficherait en "[object Object]".
   const story = publicData?.story as
@@ -78,14 +88,16 @@ export default async function PassportPage({ params }: PageProps) {
     .maybeSingle()
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      <div className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
-        <span className="text-xs tracking-[0.3em] uppercase text-white/40">{org?.name || 'KATRYA'}</span>
-        <div className="flex items-center gap-3">
-          <span className="text-xs tracking-[0.2em] uppercase text-white/30">Passeport Produit</span>
+    <main className={`min-h-screen bg-black text-white ${bodyClass}`}>
+      <div className="border-b border-white/10 px-6 py-4 flex items-center justify-between gap-4">
+        <BrandMark theme={theme} name={org?.name} displayClass={displayClass} />
+        <div className="flex items-center gap-3 shrink-0">
+          <span className={`hidden sm:inline text-xs tracking-[0.2em] uppercase text-white/30 ${displayClass}`}>
+            Passeport Produit
+          </span>
           <Link
             href="/wardrobe"
-            className="text-xs tracking-[0.2em] uppercase text-white/60 border border-white/20 px-3 py-1 rounded-full hover:border-white/50 hover:text-white transition-colors"
+            className={`text-xs tracking-[0.2em] uppercase text-white/60 border border-white/20 px-3 py-1 rounded-full hover:border-white/50 hover:text-white transition-colors ${displayClass}`}
           >
             Mon dressing
           </Link>
@@ -97,46 +109,49 @@ export default async function PassportPage({ params }: PageProps) {
           images={images}
           productName={`${product.brand} ${product.model_name}`}
           fallbackUrl={fallbackUrl}
+          accent={theme.accent}
         />
 
         <div className="mb-6">
-          <p className="text-xs text-white/40 uppercase tracking-widest">{org?.name || 'KATRYA'}</p>
-          <h1 className="text-3xl font-bold mt-1">{product.brand} — {product.model_name}</h1>
-          <p className="text-white/40 mt-2">{product.category}</p>
+          <p className={`text-xs text-white/40 uppercase tracking-widest ${displayClass}`}>
+            {org?.name || 'KATRYA'}
+          </p>
+          <h1 className={`text-3xl font-bold mt-1 ${displayClass}`}>{product.model_name}</h1>
+          <p className="text-white/40 mt-2 text-sm">{categoryLabel(product.category)}</p>
         </div>
 
-        <div className="border border-white/10 rounded-xl p-4 mb-4">
-          <h2 className="text-sm font-semibold text-white/40 mb-3">PASSEPORT NUMÉRIQUE</h2>
+        <Panel accent={theme.accent}>
+          <PanelTitle displayClass={displayClass}>Passeport numérique</PanelTitle>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-white/40">ID KATRYA</span>
-              <span className="font-mono text-xs">{product.katrya_id}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/40">Marque</span>
-              <span>{product.brand}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/40">Modèle</span>
-              <span>{product.model_name}</span>
-            </div>
+            <Row label="ID KATRYA" value={<span className="font-mono text-xs">{product.katrya_id}</span>} />
+            <Row label="Marque" value={product.brand} />
+            <Row label="Modèle" value={product.model_name} />
             {product.serial_number && (
-              <div className="flex justify-between">
-                <span className="text-white/40">N° Série</span>
-                <span className="font-mono text-xs">{product.serial_number}</span>
-              </div>
+              <Row
+                label="N° de série"
+                value={<span className="font-mono text-xs">{product.serial_number}</span>}
+              />
             )}
-            <div className="flex justify-between">
-              <span className="text-white/40">Statut</span>
-              <span className="text-green-400">✓ Authentique</span>
-            </div>
+            <Row
+              label="Statut"
+              value={
+                <span
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs"
+                  style={{ backgroundColor: theme.accent, color: '#fff' }}
+                >
+                  ✓ Authentique
+                </span>
+              }
+            />
           </div>
-        </div>
+        </Panel>
 
         {hasStory && (
-          <div className="border border-white/10 rounded-xl p-5 mb-4">
+          <Panel accent={theme.accent} className="p-5">
             {story?.headline && (
-              <h2 className="text-lg font-semibold tracking-wide mb-2">{story.headline}</h2>
+              <h2 className={`text-lg font-semibold tracking-wide mb-2 ${displayClass}`}>
+                {story.headline}
+              </h2>
             )}
             {story?.intro && (
               <p className="text-sm text-white/60 leading-relaxed whitespace-pre-line">
@@ -147,11 +162,17 @@ export default async function PassportPage({ params }: PageProps) {
               <ol className="mt-5 space-y-4">
                 {story.steps.map((step, i) => (
                   <li key={i} className="flex gap-3">
-                    <span className="mt-0.5 shrink-0 w-6 h-6 border border-white/25 rounded-full grid place-items-center text-[11px] tabular-nums text-white/50">
+                    <span
+                      className="mt-0.5 shrink-0 w-6 h-6 rounded-full grid place-items-center text-[11px] tabular-nums"
+                      style={{
+                        border: `1px solid ${theme.accent}`,
+                        color: accentOnText ? theme.accent : 'rgba(255,255,255,.65)',
+                      }}
+                    >
                       {i + 1}
                     </span>
                     <div>
-                      <p className="text-sm font-medium">{step.title}</p>
+                      <p className={`text-sm font-medium ${displayClass}`}>{step.title}</p>
                       {step.detail && (
                         <p className="text-sm text-white/50 leading-relaxed">{step.detail}</p>
                       )}
@@ -160,29 +181,33 @@ export default async function PassportPage({ params }: PageProps) {
                 ))}
               </ol>
             )}
-          </div>
+          </Panel>
         )}
 
         {publicData && (
-          <div className="border border-white/10 rounded-xl p-4 mb-4">
-            <h2 className="text-sm font-semibold text-white/40 mb-3">INFORMATIONS</h2>
+          <Panel accent={theme.accent}>
+            <PanelTitle displayClass={displayClass}>Informations</PanelTitle>
             <div className="space-y-2 text-sm">
               {Object.entries(publicData)
                 .filter(([key, value]) =>
-                  key !== 'main_image_url' &&
-                  key !== 'story' &&
+                  !isHiddenPassportField(key) &&
                   value !== null &&
                   value !== '' &&
                   typeof value !== 'object'
                 )
                 .map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <span className="text-white/40 capitalize">{key.replace(/_/g, ' ')}</span>
-                    <span className="text-white/70">{String(value)}</span>
-                  </div>
+                  <Row
+                    key={key}
+                    label={passportFieldLabel(key)}
+                    value={
+                      <span className="text-white/70">
+                        {key === 'category' ? categoryLabel(String(value)) : String(value)}
+                      </span>
+                    }
+                  />
                 ))}
             </div>
-          </div>
+          </Panel>
         )}
 
         {/* === CERTIFICATION BLOCKCHAIN === */}
@@ -190,29 +215,29 @@ export default async function PassportPage({ params }: PageProps) {
           <div className="border border-purple-500/30 bg-purple-950/20 rounded-xl p-4 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <span style={{ fontSize: 16 }}>⚡</span>
-              <h2 className="text-sm font-semibold text-purple-300 uppercase tracking-widest">Certifié Blockchain</h2>
+              <h2 className={`text-sm font-semibold text-purple-300 uppercase tracking-widest ${displayClass}`}>
+                Certifié Blockchain
+              </h2>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-white/40">Réseau</span>
-                <span className="text-purple-300 font-semibold">Polygon Mainnet</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/40">Token ID</span>
-                <span className="font-mono text-xs text-white">#{nftCert.token_id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/40">Propriétaire</span>
-                <span className="font-mono text-xs text-white/70">
-                  {nftCert.owner_address.slice(0, 6)}...{nftCert.owner_address.slice(-4)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/40">Certifié le</span>
-                <span className="text-white/70 text-xs">
-                  {new Date(nftCert.minted_at).toLocaleDateString('fr-FR')}
-                </span>
-              </div>
+              <Row label="Réseau" value={<span className="text-purple-300 font-semibold">Polygon Mainnet</span>} />
+              <Row label="Token ID" value={<span className="font-mono text-xs text-white">#{nftCert.token_id}</span>} />
+              <Row
+                label="Propriétaire"
+                value={
+                  <span className="font-mono text-xs text-white/70">
+                    {nftCert.owner_address.slice(0, 6)}...{nftCert.owner_address.slice(-4)}
+                  </span>
+                }
+              />
+              <Row
+                label="Certifié le"
+                value={
+                  <span className="text-white/70 text-xs">
+                    {new Date(nftCert.minted_at).toLocaleDateString('fr-FR')}
+                  </span>
+                }
+              />
               <div className="pt-2 flex gap-3 flex-wrap">
                 <a
                   href={`https://polygonscan.com/tx/${nftCert.transaction_hash}`}
@@ -245,10 +270,86 @@ export default async function PassportPage({ params }: PageProps) {
         <AddToWardrobeButton productId={product.id} katryaId={product.katrya_id} />
       </div>
 
-      <div className="border-t border-white/10 px-6 py-6 text-center mt-4">
-        <p className="text-xs text-white/20 tracking-widest uppercase">Powered by KATRYA NFC</p>
+      <div className="border-t border-white/10 px-6 py-6 text-center mt-4 flex flex-col items-center gap-3">
+        {theme.emblemUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={theme.emblemUrl} alt="" aria-hidden="true" className="h-5 w-auto opacity-25" />
+        )}
+        <p className={`text-xs text-white/20 tracking-widest uppercase ${displayClass}`}>
+          Powered by KATRYA NFC
+        </p>
       </div>
     </main>
+  )
+}
+
+/** Logo de la marque, ou son nom en toutes lettres si elle n'en a pas depose. */
+function BrandMark({
+  theme,
+  name,
+  displayClass,
+}: {
+  theme: BrandTheme
+  name?: string
+  displayClass: string
+}) {
+  if (theme.logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={theme.logoUrl}
+        alt={name || 'KATRYA'}
+        style={{ height: theme.logoHeight ?? 34 }}
+        className="w-auto"
+      />
+    )
+  }
+  return (
+    <span className={`text-xs tracking-[0.3em] uppercase text-white/40 ${displayClass}`}>
+      {name || 'KATRYA'}
+    </span>
+  )
+}
+
+function Panel({
+  children,
+  accent,
+  className = 'p-4',
+}: {
+  children: React.ReactNode
+  accent: string
+  className?: string
+}) {
+  return (
+    <div
+      className={`rounded-xl mb-4 ${className}`}
+      style={{ border: '1px solid rgba(255,255,255,.10)', borderLeft: `2px solid ${accent}` }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function PanelTitle({
+  children,
+  displayClass,
+}: {
+  children: React.ReactNode
+  displayClass: string
+}) {
+  return (
+    <h2 className={`text-[11px] font-semibold text-white/40 mb-3 uppercase tracking-[0.18em] ${displayClass}`}>
+      {children}
+    </h2>
+  )
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="text-white/40 shrink-0">{label}</span>
+      <span className="text-right">{value}</span>
+    </div>
   )
 }
 
