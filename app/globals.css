@@ -5,6 +5,12 @@
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
+
+  /* Polices des chartes de marque, chargees dans app/layout.tsx.
+     Les replis sont explicites : si Google Fonts ne repond pas, le passeport
+     reste lisible dans une sans-serif condensee proche. */
+  --font-display: 'Archivo Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-body: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 body {
