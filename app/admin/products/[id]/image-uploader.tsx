@@ -2,6 +2,15 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { ACCEPTED_UPLOAD_TYPES, isHevcRiskyFile, isVideoUrl } from '@/lib/media'
+
+/**
+ * Plafond de taille d'une requete sur Vercel : 4,5 Mo. Au-dela, la fonction
+ * repond "Request Entity Too Large" en texte brut -- que le code lisait comme
+ * du JSON, d'ou le message d'erreur incomprehensible "Unexpected token 'R'".
+ * Le fichier est donc refuse ici, avec son poids reel, avant tout envoi.
+ */
+const MAX_UPLOAD_BYTES = 4.4 * 1024 * 1024
 
 interface ImageItem {
   id: string
@@ -146,15 +155,28 @@ export default function ImageUploader({ productId, initialImages }: Props) {
   }
 
   const handleFileUpload = async (inputFile: File) => {
-    if (!inputFile.type.startsWith('image/')) {
-      setUploadError('Fichier non valide. Utilisez une image (jpg, png, webp).')
+    const isVideo = inputFile.type.startsWith('video/')
+    if (!inputFile.type.startsWith('image/') && !isVideo) {
+      setUploadError('Fichier non valide. Utilisez une image (jpg, png, webp) ou une vidéo (mp4).')
+      return
+    }
+    if (inputFile.size > MAX_UPLOAD_BYTES) {
+      const mo = (inputFile.size / 1024 / 1024).toFixed(1)
+      setUploadError(
+        `Fichier trop lourd : ${mo} Mo. La limite est de 4,4 Mo par envoi. ` +
+          (isVideo
+            ? 'Réencodez la vidéo en MP4 plus compressé.'
+            : 'Redimensionnez la photo (2000 px de côté suffisent).')
+      )
       return
     }
     setLoading(true)
     setUploadError('')
     setSuccessMsg('')
     try {
-      const file = await toPortableImage(inputFile)
+      // Une video n'est pas convertie : toPortableImage passe par un canvas,
+      // qui ne sait rien faire d'un fichier video.
+      const file = isVideo ? inputFile : await toPortableImage(inputFile)
       const fd = new FormData()
       fd.append('file', file)
       if (altInput) fd.append('alt_text', altInput)
@@ -176,7 +198,13 @@ export default function ImageUploader({ productId, initialImages }: Props) {
         await refreshImages()
       }
       setAltInput('')
-      setSuccessMsg('Photo uploadée avec succès !')
+      setSuccessMsg(
+        isVideo
+          ? isHevcRiskyFile(inputFile)
+            ? 'Vidéo envoyée — attention : un .mov d’iPhone est souvent encodé en HEVC, lisible sur Safari mais pas sur Chrome ni Firefox. Vérifiez le passeport public, et convertissez-la en MP4 si elle ne s’affiche pas.'
+            : 'Vidéo envoyée avec succès !'
+          : 'Photo uploadée avec succès !'
+      )
     } catch (err: any) {
       setUploadError(err.message)
     } finally {
@@ -312,9 +340,10 @@ export default function ImageUploader({ productId, initialImages }: Props) {
             }}
           >
             <p style={{ color: '#888', margin: 0, fontSize: 12 }}>
-              Glissez-déposez les photos pour les réorganiser, ou utilisez les
-              flèches. La 1<sup>re</sup> photo est l'image principale du
-              passeport public.
+              Glissez-déposez les médias pour les réorganiser, ou utilisez les
+              flèches. Le 1<sup>er</sup> est ce qui s'affiche en premier sur le
+              passeport public — gardez une photo en tête de liste, pas une
+              vidéo.
             </p>
             {orderDirty && (
               <div style={{ display: 'flex', gap: 8 }}>
@@ -386,21 +415,56 @@ export default function ImageUploader({ productId, initialImages }: Props) {
                   }}
                   title="Glisser pour réordonner"
                 >
-                  <img
-                    src={img.url}
-                    alt={img.alt_text || `Photo ${i + 1}`}
-                    style={{
-                      width: 100,
-                      height: 100,
-                      objectFit: 'cover',
-                      borderRadius: 8,
-                      border: i === 0 ? '2px solid #0cf' : '1px solid #333',
-                      pointerEvents: 'none', // let drag events bubble to parent
-                    }}
-                    onError={(e) => {
-                      ;(e.target as HTMLImageElement).style.opacity = '0.3'
-                    }}
-                  />
+                  {isVideoUrl(img.url) ? (
+                    <video
+                      src={img.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{
+                        width: 100,
+                        height: 100,
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: i === 0 ? '2px solid #0cf' : '1px solid #333',
+                        background: '#111',
+                        pointerEvents: 'none', // let drag events bubble to parent
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={img.url}
+                      alt={img.alt_text || `Photo ${i + 1}`}
+                      style={{
+                        width: 100,
+                        height: 100,
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: i === 0 ? '2px solid #0cf' : '1px solid #333',
+                        pointerEvents: 'none', // let drag events bubble to parent
+                      }}
+                      onError={(e) => {
+                        ;(e.target as HTMLImageElement).style.opacity = '0.3'
+                      }}
+                    />
+                  )}
+                  {isVideoUrl(img.url) && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 4,
+                        left: 4,
+                        background: '#000',
+                        color: '#fff',
+                        fontSize: 10,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      ▶ vidéo
+                    </span>
+                  )}
                   <span
                     style={{
                       position: 'absolute',
@@ -527,7 +591,7 @@ export default function ImageUploader({ productId, initialImages }: Props) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ACCEPTED_UPLOAD_TYPES}
           style={{ display: 'none' }}
           onChange={(e) => {
             const f = e.target.files?.[0]
@@ -539,10 +603,10 @@ export default function ImageUploader({ productId, initialImages }: Props) {
             ? '⏳ Upload en cours...'
             : isDragging
             ? '📂 Relâchez pour uploader'
-            : '📷 Glissez une image ici ou cliquez pour choisir un fichier'}
+            : '📷 Glissez une photo ou une vidéo ici, ou cliquez pour choisir un fichier'}
         </p>
         <p style={{ color: '#555', margin: '4px 0 0', fontSize: 12 }}>
-          JPG, PNG, WEBP acceptés
+          JPG, PNG, WEBP, MP4 — 4,4 Mo maximum par fichier
         </p>
       </div>
 
