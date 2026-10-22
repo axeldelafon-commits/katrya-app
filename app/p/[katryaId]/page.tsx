@@ -7,6 +7,23 @@ import { resolveTheme, accentIsReadableOnDark, type BrandTheme } from '@/lib/bra
 import { passportFieldLabel, isHiddenPassportField } from '@/lib/passport-labels'
 import { categoryLabel } from '@/lib/categories'
 
+/**
+ * Jamais de cache sur un passeport.
+ *
+ * Next met en cache les appels fetch des composants serveur, et le client
+ * Supabase passe par fetch : sans cette ligne, la page sert indefiniment le
+ * contenu lu au premier affichage. Une photo ajoutee ou un passeport
+ * republie n'apparait jamais -- c'est ce qui s'est produit sur le
+ * deploiement de previsualisation, bloque a trois photos alors que la base
+ * en comptait cinq.
+ *
+ * Pour un passeport produit, servir une version perimee n'est pas un detail
+ * de performance : la marque corrige une information et le visiteur continue
+ * de lire l'ancienne.
+ */
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface PageProps {
   params: { katryaId: string }
 }
