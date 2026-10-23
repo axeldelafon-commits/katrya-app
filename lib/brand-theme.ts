@@ -4,20 +4,26 @@
  * Le passeport est la seule page que voit l'acheteur apres un scan : elle doit
  * porter l'identite de la marque, pas celle de KATRYA. Le theme est stocke en
  * base (organizations.theme, jsonb) pour qu'une nouvelle marque n'exige aucune
- * modification de code -- seul le fichier de logo doit etre depose dans
- * public/brands/<slug>/.
+ * modification de code.
  *
- * Contrainte de lisibilite : le passeport est sur fond noir. Une couleur
- * d'accent sombre (le bleu #2B4E79 de Jadesiign, par exemple) a un contraste
- * de 2,4:1 sur du noir, tres en dessous des 4,5:1 requis pour du texte. La
- * couleur d'accent ne sert donc qu'en aplat (bandeaux, bordures, pastilles) ;
- * le texte reste blanc. C'est la raison d'etre de `accentIsReadableOnDark`.
+ * Contrainte de lisibilite : le passeport est sur fond blanc. Une couleur
+ * d'accent sombre y est pleinement utilisable comme texte -- le bleu #2B4E79
+ * de Jadesiign donne 8,5:1 sur blanc, tres au-dessus des 4,5:1 requis. C'est
+ * l'interet du fond clair : la couleur de la marque porte les titres, les
+ * numeros d'etape et le bouton d'action, au lieu de se limiter aux bordures.
+ *
+ * L'inverse existe aussi : une marque a l'accent tres clair (un jaune, un
+ * beige) ne pourrait pas porter de texte sur blanc. `accentIsReadableOnLight`
+ * tranche ce cas, et le code retombe alors sur l'encre du passeport.
  */
+
+/** Encre du passeport : repli quand l'accent de la marque est trop clair. */
+export const PASSPORT_INK = '#111111'
 
 export interface BrandTheme {
   /** Couleur d'accent de la marque, en hexadecimal. */
   accent: string
-  /** Logo affiche en tete de passeport, sur fond noir. Chemin public. */
+  /** Logo affiche en tete de passeport. Chemin public ou URL de stockage. */
   logoUrl?: string | null
   /** Hauteur d'affichage du logo, en pixels. */
   logoHeight?: number
@@ -30,7 +36,9 @@ export interface BrandTheme {
 }
 
 export const DEFAULT_THEME: BrandTheme = {
-  accent: '#FFFFFF',
+  // Sur fond blanc, l'accent par defaut doit etre une encre, pas du blanc :
+  // sans marque identifiee, le passeport se rend en noir et blanc.
+  accent: PASSPORT_INK,
   logoUrl: null,
   emblemUrl: null,
   displayFont: 'sans',
@@ -68,15 +76,24 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
 }
 
-/** Contraste de la couleur d'accent sur fond noir. */
-export function accentContrastOnBlack(accent: string): number {
-  return (relativeLuminance(accent) + 0.05) / 0.05
+/** Contraste de la couleur d'accent sur fond blanc. */
+export function accentContrastOnWhite(accent: string): number {
+  return 1.05 / (relativeLuminance(accent) + 0.05)
 }
 
 /**
- * Vrai si la couleur d'accent peut porter du texte sur fond noir.
- * Sinon, l'accent reste cantonne aux aplats et le texte reste blanc.
+ * Vrai si la couleur d'accent peut porter du texte sur fond blanc.
+ * Sinon, le texte retombe sur `PASSPORT_INK` et l'accent reste cantonne aux
+ * aplats et bordures.
  */
-export function accentIsReadableOnDark(accent: string): boolean {
-  return accentContrastOnBlack(accent) >= 4.5
+export function accentIsReadableOnLight(accent: string): boolean {
+  return accentContrastOnWhite(accent) >= 4.5
+}
+
+/**
+ * Couleur a utiliser pour du texte ou un aplat portant du blanc : l'accent
+ * de la marque s'il est assez sombre, l'encre du passeport sinon.
+ */
+export function accentInk(accent: string): string {
+  return accentIsReadableOnLight(accent) ? accent : PASSPORT_INK
 }
