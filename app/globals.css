@@ -17,3 +17,30 @@ body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
 }
+
+/**
+ * Surface du passeport public.
+ * ---------------------------------------------------------------------------
+ * Le passeport est sur fond blanc. Regrouper ses couleurs ici plutot que de
+ * semer des `text-white/40` dans le JSX a deux raisons : le jour ou un theme
+ * sombre revient, il suffit de redefinir ces variables sur un selecteur ; et
+ * surtout, les opacites sont choisies une fois, en connaissance du contraste
+ * qu'elles donnent sur blanc.
+ *
+ * Contrastes mesures sur #FFFFFF, pour du texte de 12 a 14 px (seuil WCAG AA
+ * de 4,5:1) :
+ *   --pp-label  .58  -> 4,6:1   intitules, mentions discretes
+ *   --pp-text-2 .70  -> 7,1:1   texte courant secondaire
+ *   --pp-value  .80  -> 10,7:1  valeurs du tableau
+ * Toute opacite plus faible passerait sous le seuil : ne pas eclaircir ces
+ * valeurs pour des raisons esthetiques sans refaire le calcul.
+ */
+.passport-surface {
+  --pp-bg: #ffffff;
+  --pp-fg: #111111;
+  --pp-label: rgba(17, 17, 17, 0.58);
+  --pp-text-2: rgba(17, 17, 17, 0.7);
+  --pp-value: rgba(17, 17, 17, 0.8);
+  --pp-line: rgba(17, 17, 17, 0.12);
+  --pp-fill: rgba(17, 17, 17, 0.05);
+}
