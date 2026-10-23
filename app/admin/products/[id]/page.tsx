@@ -110,7 +110,11 @@ export default async function ProductDetailPage({
         ) : (
           <p style={{ color: '#888' }}>Aucun passeport publié.</p>
         )}
-        <PublishPassportForm productId={id} product={{ brand: product.brand, model_name: product.model_name, category: product.category }} />
+        <PublishPassportForm
+          productId={id}
+          product={{ brand: product.brand, model_name: product.model_name, category: product.category }}
+          latest={latestPassport ?? null}
+        />
       </div>
 
       {/* === SECTION BLOCKCHAIN === */}

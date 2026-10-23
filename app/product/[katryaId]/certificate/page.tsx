@@ -13,6 +13,8 @@
  * - L'historique des propriétaires (si disponible)
  */
 
+export const dynamic = 'force-dynamic'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
