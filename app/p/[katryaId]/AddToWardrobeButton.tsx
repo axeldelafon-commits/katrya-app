@@ -7,9 +7,14 @@ import { useRouter } from 'next/navigation'
 interface Props {
   productId: string
   katryaId: string
+  /**
+   * Couleur du bouton. Sur fond blanc, un bouton blanc serait invisible : le
+   * passeport transmet ici l'encre de la marque, deja validee en contraste.
+   */
+  accent?: string
 }
 
-export default function AddToWardrobeButton({ productId, katryaId }: Props) {
+export default function AddToWardrobeButton({ productId, katryaId, accent = '#111111' }: Props) {
   const [loading, setLoading] = useState(false)
   const [added, setAdded] = useState(false)
   const [error, setError] = useState('')
@@ -49,12 +54,13 @@ export default function AddToWardrobeButton({ productId, katryaId }: Props) {
   if (added) {
     return (
       <div className="mt-6">
-        <div className="w-full bg-green-900/30 border border-green-700 text-green-400 py-3 rounded-xl text-center font-medium">
+        <div className="w-full bg-emerald-50 border border-emerald-300 text-emerald-800 py-3 rounded-xl text-center font-medium">
           ✓ Ajouté à votre dressing
         </div>
         <button
           onClick={() => router.push('/wardrobe')}
-          className="w-full mt-2 text-sm text-gray-400 hover:text-white underline text-center"
+          className="w-full mt-2 text-sm underline text-center hover:opacity-70"
+          style={{ color: 'var(--pp-label)' }}
         >
           Voir mon dressing →
         </button>
@@ -67,12 +73,13 @@ export default function AddToWardrobeButton({ productId, katryaId }: Props) {
       <button
         onClick={handleAdd}
         disabled={loading}
-        className="w-full bg-white text-black py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 text-sm uppercase tracking-wider"
+        className="w-full text-white py-3 rounded-xl font-semibold transition-opacity hover:opacity-85 disabled:opacity-50 text-sm uppercase tracking-wider"
+        style={{ backgroundColor: accent }}
       >
         {loading ? 'Ajout en cours...' : '+ Ajouter à mon dressing'}
       </button>
       {error && (
-        <p className="text-red-400 text-xs text-center mt-2">{error}</p>
+        <p className="text-red-700 text-xs text-center mt-2">{error}</p>
       )}
     </div>
   )
