@@ -29,8 +29,13 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
 
   if (allMedia.length === 0) {
     return (
-      <div className="mb-8 aspect-square w-full bg-white/5 rounded-2xl flex items-center justify-center">
-        <span className="text-white/20 text-sm">Aucune photo disponible</span>
+      <div
+        className="mb-8 aspect-square w-full rounded-2xl flex items-center justify-center"
+        style={{ backgroundColor: 'var(--pp-fill)' }}
+      >
+        <span className="text-sm" style={{ color: 'var(--pp-label)' }}>
+          Aucune photo disponible
+        </span>
       </div>
     )
   }
@@ -41,7 +46,10 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
   return (
     <div className="mb-8">
       {/* Media principal */}
-      <div className="aspect-square w-full bg-white/5 rounded-2xl overflow-hidden mb-3 relative">
+      <div
+        className="aspect-square w-full rounded-2xl overflow-hidden mb-3 relative"
+        style={{ backgroundColor: 'var(--pp-fill)' }}
+      >
         {activeIsVideo ? (
           <video
             // La cle force le remontage au changement de media : sans elle,
