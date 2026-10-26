@@ -18,6 +18,17 @@ interface Props {
   accent?: string
 }
 
+/**
+ * Sans poster en base, un <video> s'affiche noir tant qu'il n'est pas lance :
+ * Safari peint la premiere frame, Chrome et Firefox non. Le fragment #t=0.1
+ * demande au navigateur de se positionner sur la premiere frame, ce qui le
+ * force a la peindre. C'est ce qui donne une vignette video reconnaissable
+ * plutot qu'un carre noir.
+ */
+function withFirstFrame(url: string): string {
+  return url.includes('#') ? url : `${url}#t=0.1`
+}
+
 export default function ImageGallery({ images, productName, fallbackUrl, accent }: Props) {
   const allMedia =
     images.length > 0
@@ -30,7 +41,7 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
   if (allMedia.length === 0) {
     return (
       <div
-        className="mb-8 aspect-square w-full rounded-2xl flex items-center justify-center"
+        className="mb-8 aspect-[3/4] w-full rounded-2xl flex items-center justify-center"
         style={{ backgroundColor: 'var(--pp-fill)' }}
       >
         <span className="text-sm" style={{ color: 'var(--pp-label)' }}>
@@ -46,8 +57,17 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
   return (
     <div className="mb-8">
       {/* Media principal */}
+      {/*
+        Cadre en 3/4 et media en `contain`, non en `cover`.
+
+        Un passeport doit montrer la piece entiere : rogner, c'est couper le
+        col ou le bas d'une veste, exactement ce qu'un acheteur vient verifier.
+        Le format 3/4 plutot que le carre parce que les prises de vue sont
+        faites au telephone, donc verticales : un carre laisserait de larges
+        bandes vides de part et d'autre d'une video 9/16.
+      */}
       <div
-        className="aspect-square w-full rounded-2xl overflow-hidden mb-3 relative"
+        className="aspect-[3/4] w-full rounded-2xl overflow-hidden mb-3 relative"
         style={{ backgroundColor: 'var(--pp-fill)' }}
       >
         {activeIsVideo ? (
@@ -55,8 +75,8 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
             // La cle force le remontage au changement de media : sans elle,
             // React reutilise l'element <video> et garde la piste precedente.
             key={active.id}
-            src={active.url}
-            className="w-full h-full object-cover"
+            src={withFirstFrame(active.url)}
+            className="w-full h-full object-contain"
             controls
             playsInline
             preload="metadata"
@@ -66,7 +86,7 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
           <img
             src={active.url}
             alt={active.alt_text || productName}
-            className="w-full h-full object-cover transition-opacity duration-300"
+            className="w-full h-full object-contain transition-opacity duration-300"
           />
         )}
         {allMedia.length > 1 && !activeIsVideo && (
@@ -101,7 +121,7 @@ export default function ImageGallery({ images, productName, fallbackUrl, accent 
                         vignette. preload="metadata" suffit a l'obtenir sans
                         telecharger la video entiere. */}
                     <video
-                      src={item.url}
+                      src={withFirstFrame(item.url)}
                       className="w-full h-full object-cover"
                       muted
                       playsInline
