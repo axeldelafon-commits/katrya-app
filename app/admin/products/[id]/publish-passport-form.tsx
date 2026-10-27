@@ -3,25 +3,54 @@ import { useState } from 'react'
 
 type Product = { brand: string; model_name: string; category: string }
 
-export default function PublishPassportForm({ productId, product }: { productId: string; product: Product }) {
-  const [form, setForm] = useState({
-    product_name: product.model_name,
-    brand: product.brand,
-    category: product.category,
-    color: '',
-    size: '',
-    material_composition: '',
-    country_of_manufacture: '',
-    care_instructions: '',
-    authenticity_message: 'Produit vérifié par KATRYA',
-    main_image_url: '',
-    story_headline: '',
-    story_intro: '',
-    story_steps: '',
-    supplier_name: '',
-    supplier_batch_id: '',
-    internal_notes: '',
-  })
+type Passport = {
+  version: number
+  public_data: Record<string, unknown> | null
+  private_data: Record<string, unknown> | null
+} | null
+
+/**
+ * Publier cree une nouvelle version qui remplace la precedente sur la page
+ * publique. Le formulaire doit donc partir du contenu actuel, pas d'un
+ * formulaire vide : sinon un simple clic sur "Publier" efface tout le
+ * passeport -- recit, matiere, couleur -- sans le moindre avertissement.
+ * C'est exactement ce qui est arrive sur L'Homme de la mer le 22/10/2026.
+ */
+function initialForm(product: Product, latest: Passport) {
+  const pub = (latest?.public_data ?? {}) as Record<string, any>
+  const priv = (latest?.private_data ?? {}) as Record<string, any>
+  const story = (pub.story ?? {}) as Record<string, any>
+  const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback)
+  return {
+    product_name: str(pub.product_name, product.model_name),
+    brand: str(pub.brand, product.brand),
+    category: str(pub.category, product.category),
+    color: str(pub.color),
+    size: str(pub.size),
+    material_composition: str(pub.material_composition),
+    country_of_manufacture: str(pub.country_of_manufacture),
+    care_instructions: str(pub.care_instructions),
+    authenticity_message: str(pub.authenticity_message, 'Produit vérifié par KATRYA'),
+    main_image_url: str(pub.main_image_url),
+    story_headline: str(story.headline),
+    story_intro: str(story.intro),
+    story_steps: stepsToText(story.steps),
+    supplier_name: str(priv.supplier_name),
+    supplier_batch_id: str(priv.supplier_batch_id),
+    internal_notes: str(priv.internal_notes),
+  }
+}
+
+export default function PublishPassportForm({
+  productId,
+  product,
+  latest = null,
+}: {
+  productId: string
+  product: Product
+  latest?: Passport
+}) {
+  const [form, setForm] = useState(() => initialForm(product, latest))
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
@@ -62,10 +91,21 @@ export default function PublishPassportForm({ productId, product }: { productId:
     setSuccess(`Passeport publié en version v${json.passport.version}`)
   }
 
+  const feedback = error ? (
+    <p style={{ color: '#f87171', margin: 0 }}>{error}</p>
+  ) : success ? (
+    <p style={{ color: '#86efac', margin: 0 }}>{success}</p>
+  ) : null
+
   return (
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-      {success && <p style={{ color: '#86efac' }}>{success}</p>}
+      {feedback}
+      {latest && (
+        <p style={{ margin: 0, fontSize: 11, color: '#777', lineHeight: 1.5 }}>
+          Les champs reprennent la version v{latest.version} actuellement en ligne.
+          Publier crée une nouvelle version qui la remplace sur la page publique.
+        </p>
+      )}
       <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#aaa', fontSize: 13 }}>Données publiques</p>
       {(['product_name','brand','category','color','size','material_composition','country_of_manufacture','authenticity_message','main_image_url'] as const).map(k => (
         <label key={k} style={labelStyle}>
@@ -96,7 +136,7 @@ export default function PublishPassportForm({ productId, product }: { productId:
           value={form.story_steps}
           onChange={e => update('story_steps', e.target.value)}
           style={{ ...inputStyle, minHeight: 100, fontFamily: 'ui-monospace, monospace' }}
-          placeholder={'Tissée | Un rouleau d\u2019éponge produit pour une commande annulée\nAcquise | Achetée en lot, avril 2026\nCousue | Atelier de Genève, mai 2026'}
+          placeholder={'Tissée | Un rouleau d’éponge produit pour une commande annulée\nAcquise | Achetée en lot, avril 2026\nCousue | Atelier de Genève, mai 2026'}
         />
       </label>
 
@@ -114,6 +154,11 @@ export default function PublishPassportForm({ productId, product }: { productId:
       <button type="submit" disabled={loading} style={btnStyle}>
         {loading ? 'Publication...' : 'Publier le passeport'}
       </button>
+      {/* La confirmation est repetee ici : le formulaire est long, et un
+          message affiche uniquement en haut passe inapercu depuis le bouton.
+          Sans retour visible, on croit que le clic n'a rien fait -- et on
+          republie. */}
+      {feedback}
     </form>
   )
 }
@@ -134,6 +179,22 @@ function parseSteps(raw: string): { title: string; detail: string }[] {
       return { title: line.slice(0, i).trim(), detail: line.slice(i + 1).trim() }
     })
     .filter(s => s.title.length > 0)
+}
+
+/** Operation inverse de parseSteps, pour reafficher le recit existant. */
+function stepsToText(steps: unknown): string {
+  if (!Array.isArray(steps)) return ''
+  return steps
+    .map((s) => {
+      if (!s || typeof s !== 'object') return ''
+      const { title, detail } = s as { title?: unknown; detail?: unknown }
+      const t = typeof title === 'string' ? title.trim() : ''
+      const d = typeof detail === 'string' ? detail.trim() : ''
+      if (!t) return ''
+      return d ? `${t} | ${d}` : t
+    })
+    .filter(Boolean)
+    .join('\n')
 }
 
 const inputStyle: React.CSSProperties = { display: 'block', padding: '7px 12px', background: '#0d0d0d', border: '1px solid #2a2a2a', borderRadius: 6, color: '#fff', fontSize: 13, width: '100%', marginTop: 3 }
